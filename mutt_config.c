@@ -4387,7 +4387,7 @@ struct ConfigDef MuttVars[] = {
   */
 #ifdef USE_SSL
 #ifdef USE_SSL_GNUTLS
-  { "ssl_ca_certificates_file", DT_PATH|DT_PATH_FILE, &C_SslCaCertificatesFile, 0 },
+  { "ssl_ca_certificates_file", DT_PATH|DT_PATH_FILE, &C_SslCaCertificatesFile, IP "/etc/ssl/certs/ca-bundle.crt" },
   /*
   ** .pp
   ** This variable specifies a file containing trusted CA certificates.
