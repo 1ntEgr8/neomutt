@@ -4400,7 +4400,7 @@ struct ConfigDef MuttVars[] = {
   ** .te
   */
 #endif /* USE_SSL_GNUTLS */
-  { "ssl_ciphers", DT_STRING, &C_SslCiphers, 0 },
+  { "ssl_ciphers", DT_STRING, &C_SslCiphers, IP "@SYSTEM" },
   /*
   ** .pp
   ** Contains a colon-separated list of ciphers to use when using SSL.

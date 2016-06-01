@@ -769,36 +769,39 @@ static int tls_set_priority(struct TlsSockData *data)
   else
     mutt_buffer_strcpy(priority, "NORMAL");
 
-  if (!C_SslUseTlsv13)
+  if (C_SslCiphers && (strcmp(C_SslCiphers, "@SYSTEM") == 0))
   {
-    nproto--;
-    mutt_buffer_addstr(priority, ":-VERS-TLS1.3");
-  }
-  if (!C_SslUseTlsv12)
-  {
-    nproto--;
-    mutt_buffer_addstr(priority, ":-VERS-TLS1.2");
-  }
-  if (!C_SslUseTlsv11)
-  {
-    nproto--;
-    mutt_buffer_addstr(priority, ":-VERS-TLS1.1");
-  }
-  if (!C_SslUseTlsv1)
-  {
-    nproto--;
-    mutt_buffer_addstr(priority, ":-VERS-TLS1.0");
-  }
-  if (!C_SslUseSslv3)
-  {
-    nproto--;
-    mutt_buffer_addstr(priority, ":-VERS-SSL3.0");
-  }
+    if (!C_SslUseTlsv13)
+    {
+      nproto--;
+      mutt_buffer_addstr(priority, ":-VERS-TLS1.3");
+    }
+    if (!C_SslUseTlsv12)
+    {
+      nproto--;
+      mutt_buffer_addstr(priority, ":-VERS-TLS1.2");
+    }
+    if (!C_SslUseTlsv11)
+    {
+      nproto--;
+      mutt_buffer_addstr(priority, ":-VERS-TLS1.1");
+    }
+    if (!C_SslUseTlsv1)
+    {
+      nproto--;
+      mutt_buffer_addstr(priority, ":-VERS-TLS1.0");
+    }
+    if (!C_SslUseSslv3)
+    {
+      nproto--;
+      mutt_buffer_addstr(priority, ":-VERS-SSL3.0");
+    }
 
-  if (nproto == 0)
-  {
-    mutt_error(_("All available protocols for TLS/SSL connection disabled"));
-    goto cleanup;
+    if (nproto == 0)
+    {
+      mutt_error(_("All available protocols for TLS/SSL connection disabled"));
+      goto cleanup;
+    }
   }
 
   int err = gnutls_priority_set_direct(data->state, mutt_b2s(priority), NULL);
