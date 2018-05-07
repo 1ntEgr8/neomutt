@@ -2377,6 +2377,9 @@ int mutt_index_menu(struct MuttWindow *dlg)
 #ifdef USE_SIDEBAR
       case OP_SIDEBAR_OPEN:
 #endif
+#ifdef USE_DEVEL_HELP
+      case OP_HELP_BOX:
+#endif
       case OP_MAIN_CHANGE_FOLDER:
       case OP_MAIN_NEXT_UNREAD_MAILBOX:
       case OP_MAIN_CHANGE_FOLDER_READONLY:
@@ -2432,6 +2435,16 @@ int mutt_index_menu(struct MuttWindow *dlg)
 
           /* Mark the selected dir for the neomutt browser */
           mutt_browser_select_dir(mailbox_path(m));
+        }
+#endif
+#ifdef USE_DEVEL_HELP
+        else if (op == OP_HELP_BOX)
+        {
+          cp = _("Open help mailbox/chapter");
+          mutt_str_strfcpy(buf, "help://", sizeof(buf));
+          mutt_buffer_enter_fname(cp, folderbuf, true);
+          if (mutt_buffer_is_empty(folderbuf))
+            mutt_buffer_addstr(folderbuf, C_HelpDocDir);
         }
 #endif
         else
