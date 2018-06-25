@@ -52,6 +52,8 @@ extern bool  C_UseEnvelopeFrom;
 extern bool  C_UserAgent;
 extern short C_WrapHeaders;
 
+#define MUTT_RANDTAG_LEN 16
+
 /**
  * enum MuttWriteHeaderMode - Modes for mutt_rfc822_write_header()
  */
