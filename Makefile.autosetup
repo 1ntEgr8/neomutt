@@ -547,7 +547,7 @@ uninstall: $(UNINSTALL_TARGETS)
 distclean: clean
 	$(RM) $(DEPFILES) autosetup/jimsh0 config.h config.log conststrings.c \
 		contrib/Makefile doc/Makefile doc/neomutt.1 html Makefile po/Makefile \
-		test/Makefile .clang_complete
+		test/Makefile .clang_complete fuzz/Makefile
 	$(RM) *.gc?? */*.gc?? test/*/*.gc??
 	$(RM) lcov.info lcov
 
@@ -577,6 +577,9 @@ coverage: all test
 @include @srcdir@/doc/Makefile.autosetup
 @if ENABLE_UNIT_TESTS
 @include @srcdir@/test/Makefile.autosetup
+@endif
+@if ENABLE_FUZZ_TESTS
+@include @srcdir@/fuzz/Makefile.autosetup
 @endif
 
 # vim: set ts=8 noexpandtab:
