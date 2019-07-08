@@ -24,14 +24,14 @@
 
 #include "config.h"
 #include <stddef.h>
-#include <dirent.h>
 #include <errno.h>
+#include <ftw.h>
 #include <limits.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/stat.h>
 #include <time.h>
 #include <unistd.h>
 #include "mutt/lib.h"
@@ -40,15 +40,14 @@
 #include "email/lib.h"
 #include "core/lib.h"
 #include "help.h"
-#include "context.h"
 #include "globals.h"
 #include "mutt_header.h"
-#include "mutt_options.h"
 #include "mutt_thread.h"
 #include "muttlib.h"
 #include "mx.h"
-#include "protos.h"
 #include "sendlib.h"
+
+struct stat;
 
 #define HELP_CACHE_DOCLIST                                                     \
   1 ///< whether to cache the DocList between help_mbox_open calls
