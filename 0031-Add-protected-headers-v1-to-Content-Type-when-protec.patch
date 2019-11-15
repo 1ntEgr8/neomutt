@@ -1,0 +1,44 @@
+From 162e60883c76071641dcc46ef09bd596f50068a3 Mon Sep 17 00:00:00 2001
+From: =?UTF-8?q?Marek=20Marczykowski-G=C3=B3recki?=
+ <marmarek@invisiblethingslab.com>
+Date: Tue, 17 Dec 2019 03:02:19 +0100
+Subject: Add protected-headers="v1" to Content-Type when protecting headers
+
+This is optional part of the draft RFC, marked with "FIXME":
+
+    * FIXME: Enigmail adds "protected-headers="v1"" parameter to
+      "payload" here. Is this necessary?
+
+The answer is: for Enigmail yes. Otherwise it ignores protected headers
+and use the envelope headers. This results in all the emails listed with
+"..." subject, which isn't very helpful.
+
+Since the user can disable protected headers while in the compose menu
+(after potentially failed send), remove the attribute if protected
+headers are disabled.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/162e60883c76071641dcc46ef09bd596f50068a3
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ crypt.c | 4 ++++
+ 1 file changed, 4 insertions(+)
+
+diff --git a/crypt.c b/crypt.c
+index 3e9d0449..87cf2534 100644
+--- a/crypt.c
++++ b/crypt.c
+@@ -231,7 +231,11 @@ int mutt_protect (HEADER *msg, char *keylist, int postpone)
+ 
+     mutt_free_envelope (&msg->content->mime_headers);
+     msg->content->mime_headers = protected_headers;
++    /* Optional part of the draft RFC, but required by Enigmail */
++    mutt_set_parameter("protected-headers", "v1", &msg->content->parameter);
+   }
++  else
++    mutt_delete_parameter("protected-headers", &msg->content->parameter);
+ 
+   /* A note about msg->content->mime_headers.  If postpone or send
+    * fails, the mime_headers is cleared out before returning to the
+-- 
+2.24.1
+

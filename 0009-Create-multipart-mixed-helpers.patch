@@ -1,0 +1,206 @@
+From 3f9116816d9df94e5c1cb6650bd422897ba7a228 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Tue, 29 Oct 2019 14:58:57 +0800
+Subject: Create multipart/mixed helpers
+
+Since we will be dealing with multipart/alternative, we need the
+helpers to be a bit more specific.
+
+We need to distinguish a top-level multipart/alternative from a
+multipart/mixed created because of attachments.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/3f9116816d9df94e5c1cb6650bd422897ba7a228
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ compose.c  |  4 ++--
+ main.c     |  2 +-
+ postpone.c |  4 +++-
+ protos.h   |  3 ++-
+ send.c     | 20 ++++++++++++--------
+ sendlib.c  | 19 +++++++++++++++++--
+ 6 files changed, 37 insertions(+), 15 deletions(-)
+
+diff --git a/compose.c b/compose.c
+index cff4e294..19de4c0c 100644
+--- a/compose.c
++++ b/compose.c
+@@ -1607,12 +1607,12 @@ int mutt_compose_menu(struct Email *msg,   /* structure for new message */
+           mutt_buffer_expand_path(fname);
+ 
+           if (msg->content->next)
+-            msg->content = mutt_make_multipart(msg->content);
++            msg->content = mutt_make_multipart_mixed(msg->content);
+ 
+           if (mutt_write_fcc(mutt_b2s(fname), msg, NULL, 0, NULL) == 0)
+             mutt_message _("Message written.");
+ 
+-          msg->content = mutt_remove_multipart(msg->content);
++          msg->content = mutt_remove_multipart_mixed(msg->content);
+         }
+         break;
+ 
+diff --git a/main.c b/main.c
+index 7e8b37c4..fa390cd1 100644
+--- a/main.c
++++ b/main.c
+@@ -1237,7 +1237,7 @@ int main(int argc, char **argv, char **environ)
+         if (rv < 0)
+         {
+           if (msg->content->next)
+-            msg->content = mutt_make_multipart(msg->content);
++            msg->content = mutt_make_multipart_mixed(msg->content);
+           mutt_encode_descriptions(msg->content, 1);
+           mutt_prepare_envelope(msg->env, 0);
+           mutt_env_to_intl(msg->env, NULL, NULL);
+diff --git a/postpone.c b/postpone.c
+index 790cde48..6d4b5c6e 100644
+--- a/postpone.c
++++ b/postpone.c
+@@ -671,7 +671,9 @@ int mutt_prepare_template(FILE *fp, struct Context *ctx, struct Email *newhdr, struct Email *hdr,
+    */
+ 
+   if (newhdr->content->type == TYPEMULTIPART)
+-    newhdr->content = mutt_remove_multipart(newhdr->content);
++    newhdr->content = mutt_remove_multipart_mixed(newhdr->content);
++
++  /* TODO: deal with multipart/alternative here */
+ 
+   s.fpin = bfp;
+ 
+diff --git a/protos.h b/protos.h
+index e2f033b1..eb98f53c 100644
+--- a/protos.h
++++ b/protos.h
+@@ -94,7 +94,8 @@ struct Address *mutt_parse_adrlist(struct Address *, const char *);
+ struct Body *mutt_make_file_attach(const char *);
+ struct Body *mutt_make_message_attach(struct Context *, struct Email *, int);
+ struct Body *mutt_remove_multipart(struct Body *);
+-struct Body *mutt_make_multipart(struct Body *);
++struct Body *mutt_remove_multipart_mixed(struct Body *);
++struct Body *mutt_make_multipart_mixed(struct Body *);
+ struct Body *mutt_new_body(void);
+ struct Body *mutt_parse_multipart(FILE *, const char *, LOFF_T, int);
+ struct Body *mutt_parse_messageRFC822(FILE *, struct Body *);
+diff --git a/send.c b/send.c
+index 4379a35f..c47a9144 100644
+--- a/send.c
++++ b/send.c
+@@ -1479,7 +1479,7 @@ static int postpone_message(struct Email *msg, struct Email *cur, const char *fcc, int flag
+   }
+ 
+   if (msg->content->next)
+-    msg->content = mutt_make_multipart(msg->content);
++    msg->content = mutt_make_multipart_mixed(msg->content);
+ 
+   mutt_encode_descriptions(msg->content, 1);
+ 
+@@ -1498,7 +1498,7 @@ static int postpone_message(struct Email *msg, struct Email *cur, const char *fcc, int flag
+     {
+       if (mutt_autocrypt_set_sign_as_default_key(msg))
+       {
+-        msg->content = mutt_remove_multipart(msg->content);
++        msg->content = mutt_remove_multipart_mixed(msg->content);
+         decode_descriptions(msg->content);
+         return -1;
+       }
+@@ -1513,7 +1513,7 @@ static int postpone_message(struct Email *msg, struct Email *cur, const char *fcc, int flag
+       if (mutt_protect(msg, pgpkeylist, 1) == -1)
+       {
+         FREE(&pgpkeylist);
+-        msg->content = mutt_remove_multipart(msg->content);
++        msg->content = mutt_remove_multipart_mixed(msg->content);
+         decode_descriptions(msg->content);
+         return -1;
+       }
+@@ -1542,7 +1542,7 @@ static int postpone_message(struct Email *msg, struct Email *cur, const char *fcc, int flag
+       msg->content = clear_content;
+     }
+     mutt_free_envelope(&msg->content->mime_headers);  /* protected headers */
+-    msg->content = mutt_remove_multipart(msg->content);
++    msg->content = mutt_remove_multipart_mixed(msg->content);
+     decode_descriptions(msg->content);
+     mutt_unprepare_envelope(msg->env);
+     return -1;
+@@ -2119,8 +2119,10 @@ main_loop:
+     }
+   }
+ 
++  /* multipart/alternative generation does here */
++
+   if (msg->content->next)
+-    msg->content = mutt_make_multipart(msg->content);
++    msg->content = mutt_make_multipart_mixed(msg->content);
+ 
+   /*
+    * Ok, we need to do it this way instead of handling all fcc stuff in
+@@ -2150,7 +2152,7 @@ main_loop:
+       if ((crypt_get_keys(msg, &pgpkeylist, 0) == -1) ||
+           mutt_protect(msg, pgpkeylist, 0) == -1)
+       {
+-        msg->content = mutt_remove_multipart(msg->content);
++        msg->content = mutt_remove_multipart_mixed(msg->content);
+ 
+         FREE(&pgpkeylist);
+ 
+@@ -2197,7 +2199,9 @@ main_loop:
+         mutt_free_body(&msg->content); /* destroy PGP data */
+         msg->content = clear_content;        /* restore clear text. */
+       }
+-      else if ((msg->security & SIGN) && msg->content->type == TYPEMULTIPART)
++      else if ((msg->security & SIGN) &&
++               msg->content->type == TYPEMULTIPART &&
++               !ascii_strcasecmp(msg->content->subtype, "signed"))
+       {
+         mutt_free_body(&msg->content->parts->next);             /* destroy sig */
+         msg->content = mutt_remove_multipart(msg->content);
+@@ -2205,7 +2209,7 @@ main_loop:
+ 
+       FREE(&pgpkeylist);
+       mutt_free_envelope(&msg->content->mime_headers);  /* protected headers */
+-      msg->content = mutt_remove_multipart(msg->content);
++      msg->content = mutt_remove_multipart_mixed(msg->content);
+       decode_descriptions(msg->content);
+       mutt_unprepare_envelope(msg->env);
+       goto main_loop;
+diff --git a/sendlib.c b/sendlib.c
+index cc7a8145..7ff6e74e 100644
+--- a/sendlib.c
++++ b/sendlib.c
+@@ -1507,13 +1507,13 @@ static int mutt_check_boundary(const char* boundary, struct Body *b)
+   return 0;
+ }
+ 
+-struct Body *mutt_make_multipart(struct Body *b)
++static struct Body *mutt_make_multipart(struct Body *b, const char *subtype)
+ {
+   struct Body *new;
+ 
+   new = mutt_new_body();
+   new->type = TYPEMULTIPART;
+-  new->subtype = safe_strdup("mixed");
++  new->subtype = safe_strdup(subtype);
+   new->encoding = get_toplevel_encoding(b);
+   do
+   {
+@@ -1545,6 +1545,21 @@ struct Body *mutt_remove_multipart(struct Body *b)
+   return b;
+ }
+ 
++struct Body *mutt_make_multipart_mixed(struct Body *b)
++{
++  return mutt_make_multipart(b, "mixed");
++}
++
++/* remove the multipart/mixed body if it exists */
++struct Body *mutt_remove_multipart_mixed(struct Body *b)
++{
++  if ((b->type == TYPEMULTIPART) &&
++      !ascii_strcasecmp(b->subtype, "mixed"))
++    return mutt_remove_multipart(b);
++
++  return b;
++}
++
+ char *mutt_make_date(char *s, size_t len)
+ {
+   time_t t = time(NULL);

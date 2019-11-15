@@ -1,0 +1,45 @@
+From 060c6345bb3f7627c6b9241fad0c6ed381f5bc6b Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sun, 1 Dec 2019 10:20:38 -0800
+Subject: Minor isodate fixes
+
+Make sure the year isn't negative if they type something crazy.
+
+Don't use unitialized p for the month error message.  Ideally we would
+either use %d or provide a better error message.  But I think it's
+enough to just print out the full string for now.  Non-iso dates do
+that for day-of-month for example.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/060c6345bb3f7627c6b9241fad0c6ed381f5bc6b
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ pattern.c | 6 ++++--
+ 1 file changed, 4 insertions(+), 2 deletions(-)
+
+diff --git a/pattern.c b/pattern.c
+index a7aa4fd0..9cddd736 100644
+--- a/pattern.c
++++ b/pattern.c
+@@ -419,7 +419,9 @@ static const char *getDate (const char *s, struct tm *t, BUFFER *err)
+     int mday;
+     sscanf (s, "%4d%2d%2d", &year, &month, &mday);
+ 
+-    t->tm_year = year - 1900;
++    t->tm_year = year;
++    if (t->tm_year > 1900)
++      t->tm_year -= 1900;
+     t->tm_mon = month - 1;
+     t->tm_mday = mday;
+ 
+@@ -430,7 +432,7 @@ static const char *getDate (const char *s, struct tm *t, BUFFER *err)
+     }
+     if (t->tm_mon < 0 || t->tm_mon > 11)
+     {
+-      snprintf (err->data, err->dsize, _("Invalid month: %s"), p);
++      snprintf (err->data, err->dsize, _("Invalid month: %s"), s);
+       return NULL;
+     }
+ 
+-- 
+2.24.1
+

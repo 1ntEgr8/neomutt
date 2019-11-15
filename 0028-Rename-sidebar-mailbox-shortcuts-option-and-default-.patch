@@ -1,0 +1,42 @@
+From 011cfc671973fd4ab4382423c9d62d860003eb26 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Fri, 13 Dec 2019 10:57:03 -0800
+Subject: Rename sidebar mailbox shortcuts option and default off
+
+Rename to $sidebar_use_mailbox_shortcuts.  The shortening wasn't that
+much shorter and made the name confusing.
+
+To prevent complaints in the future as others transition to 1.13,
+default off.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/011cfc671973fd4ab4382423c9d62d860003eb26
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ init.h | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+
+diff --git a/init.h b/init.h
+index c7dc59db..4cd4faa5 100644
+--- a/init.h
++++ b/init.h
+@@ -3335,14 +3335,14 @@ struct option_t MuttVars[] = {
+   ** You may optionally use the ``reverse-'' prefix to specify reverse sorting
+   ** order (example: ``\fCset sort_browser=reverse-date\fP'').
+   */
+-  { "sidebar_use_mb_shortcuts", DT_BOOL, R_SIDEBAR, {.l=OPTSIDEBARUSEMBSHORTCUTS}, {.l=1} },
++  { "sidebar_use_mailbox_shortcuts", DT_BOOL, R_SIDEBAR, {.l=OPTSIDEBARUSEMBSHORTCUTS}, {.l=0} },
+   /*
+   ** .pp
+   ** When set, sidebar mailboxes will be displayed with mailbox shortcut prefixes
+   ** "=" or "~".
+   ** .pp
+-  ** When unset, the sidebar will use pre-1.13.0 behavior: trimming off a matching
+-  ** $$folder but otherwise not using mailbox shortcuts.
++  ** When unset, the sidebar will trim off a matching $$folder prefix
++  ** but otherwise not use mailbox shortcuts.
+   */
+   { "sidebar_visible", DT_BOOL, R_REFLOW, {.l=OPTSIDEBAR}, {.l=0} },
+   /*
+-- 
+2.24.1
+

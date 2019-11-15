@@ -1,0 +1,36 @@
+From ba1b595cc63843be18a0bdd0adcb16cf7eba588d Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sun, 1 Dec 2019 12:44:36 -0800
+Subject: Minor documentation fixes
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/ba1b595cc63843be18a0bdd0adcb16cf7eba588d
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ doc/manual.xml.head | 4 ++--
+ 1 file changed, 2 insertions(+), 2 deletions(-)
+
+diff --git a/doc/manual.xml.head b/doc/manual.xml.head
+index 3fcc9e6b..b16d03a9 100644
+--- a/doc/manual.xml.head
++++ b/doc/manual.xml.head
+@@ -5171,7 +5171,7 @@ how the numbers are displayed.
+ 
+ <para>
+   <link linkend="size-units-on-left">$size_units_on_left</link> will
+-  display the unit (<quote>K</quote> or <quote>M</quote> to the left
++  display the unit (<quote>K</quote> or <quote>M</quote>) to the left
+   of the number, instead of the right if unset.
+ </para>
+ 
+@@ -8155,7 +8155,7 @@ quadoption and
+ <link linkend="send-multipart-alternative-filter">$send_multipart_alternative_filter</link>
+ filter script.  The composed <literal>text/plain</literal> content
+ will be piped to the filter script's stdin.  The output from the
+-filter script should be the generated mime/type of the content, a
++filter script should be the generated mime type of the content, a
+ blank line, and the content.  For example:
+ </para>
+ <screen>
+-- 
+2.24.1
+

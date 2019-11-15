@@ -1,0 +1,74 @@
+From 54aa06f7d66b933a78dd1738bc1a88587b890c9f Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sat, 23 Nov 2019 19:45:20 -0800
+Subject: Add a bit more documentation about sending
+
+Although the behavior has now been fixed, add $write_bcc references to
+$record, $sendmail, and $smtp_url to make users more aware of the
+behavior.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/54aa06f7d66b933a78dd1738bc1a88587b890c9f
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ doc/manual.xml.head | 12 ++++++++++++
+ init.h              |  7 ++++++-
+ 2 files changed, 18 insertions(+), 1 deletion(-)
+
+diff --git a/doc/manual.xml.head b/doc/manual.xml.head
+index ed70c710..3fcc9e6b 100644
+--- a/doc/manual.xml.head
++++ b/doc/manual.xml.head
+@@ -1437,6 +1437,18 @@ in <link linkend="status-format">$status_format</link> will change to a
+ </para>
+ </note>
+ 
++<para>
++After exiting the compose menu via <literal>&lt;send-message&gt;</literal>,
++the message will be sent.  If configured and enabled, this can happen via
++<link linkend="sending-mixmaster">mixmaster</link> or
++<link linkend="smtp">$smtp_url</link>.  Otherwise
++<link linkend="sendmail">$sendmail</link> will be invoked.  Prior to
++version 1.13, Mutt enabled <link linkend="write-bcc">$write_bcc</link> by
++default, assuming the MTA would automatically remove a
++<literal>Bcc:</literal> header as part of delivery.  Starting with 1.13, the
++option is unset by default, but no longer affects the fcc copy of the message.
++</para>
++
+ </sect2>
+ 
+ <sect2 id="edit-header">
+diff --git a/init.h b/init.h
+index 27c734bc..89e85bfb 100644
+--- a/init.h
++++ b/init.h
+@@ -2879,7 +2879,8 @@ struct option_t MuttVars[] = {
+   ** command to create a ``Bcc:'' field with your email address in it.)
+   ** .pp
+   ** The value of \fI$$record\fP is overridden by the $$force_name and
+-  ** $$save_name variables, and the ``$fcc-hook'' command.  Also see $$copy.
++  ** $$save_name variables, and the ``$fcc-hook'' command.  Also see $$copy
++  ** and $$write_bcc.
+   */
+   { "reflow_space_quotes",	DT_BOOL, R_NONE, {.l=OPTREFLOWSPACEQUOTES}, {.l=1} },
+   /*
+@@ -3157,6 +3158,8 @@ struct option_t MuttVars[] = {
+   ** adding a \fC--\fP delimiter (if not already present).  Additional
+   ** flags, such as for $$use_8bitmime, $$use_envelope_from,
+   ** $$dsn_notify, or $$dsn_return will be added before the delimiter.
++  ** .pp
++  ** \fBSee also:\fP $$write_bcc.
+   */
+   { "sendmail_wait",	DT_NUM,  R_NONE, {.p=&SendmailWait}, {.l=0} },
+   /*
+@@ -3694,6 +3697,8 @@ struct option_t MuttVars[] = {
+   ** where ``[...]'' denotes an optional part.
+   ** Setting this variable overrides the value of the $$sendmail
+   ** variable.
++  ** .pp
++  ** Also see $$write_bcc.
+   */
+ #endif /* USE_SMTP */
+   { "sort",		DT_SORT, R_INDEX|R_RESORT, {.p=&Sort}, {.l=SORT_DATE} },
+-- 
+2.24.1
+

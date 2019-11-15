@@ -1,0 +1,81 @@
+From 06698649d19a18a427813fc7bae2c8fb620ee73a Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Wed, 13 Nov 2019 19:28:11 -0800
+Subject: Change $send_multipart_alternative to run in batch mode on ask-yes
+
+Emulate the behavior of $copy, which performs fcc for 'yes' or
+'ask-yes' values.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/06698649d19a18a427813fc7bae2c8fb620ee73a
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ send.c | 43 +++++++++++++++++++++++++------------------
+ 1 file changed, 25 insertions(+), 18 deletions(-)
+
+diff --git a/send.c b/send.c
+index 74087168..ad24fef3 100644
+--- a/send.c
++++ b/send.c
+@@ -1098,20 +1098,31 @@ struct Address *mutt_default_from(void)
+   return (adr);
+ }
+ 
+-static int generate_multipart_alternative(struct Email *msg)
++static int generate_multipart_alternative(struct Email *msg, int flags)
+ {
+   struct Body *alternative;
+ 
+   if (!SendMultipartAltFilter)
+     return 0;
+-  if (query_quadoption(OPT_SENDMULTIPARTALT,
+-                        /* L10N:
+-                           This is the query for the $send_multipart_alternative quadoption.
+-                           Answering yes generates an alternative content using
+-                           $send_multipart_alternative_filter
+-                        */
+-                        _("Generate multipart/alternative content?")) != MUTT_YES)
+-    return 0;
++
++  /* In batch mode, only run if the quadoption is yes or ask-yes */
++  if (flags & SENDBATCH)
++  {
++    if (!(quadoption(OPT_SENDMULTIPARTALT) & 0x1))
++      return 0;
++  }
++  else
++  {
++    if (query_quadoption(OPT_SENDMULTIPARTALT,
++                          /* L10N:
++                             This is the query for the $send_multipart_alternative quadoption.
++                             Answering yes generates an alternative content using
++                             $send_multipart_alternative_filter
++                          */
++                          _("Generate multipart/alternative content?")) != MUTT_YES)
++      return 0;
++  }
++
+ 
+   alternative = mutt_run_send_alternative_filter(msg->content);
+   if (!alternative)
+@@ -2144,16 +2155,12 @@ main_loop:
+     }
+   }
+ 
+-  if (!(flags & SENDBATCH) ||
+-      quadoption(OPT_SENDMULTIPARTALT) == MUTT_YES)
++  if (generate_multipart_alternative(msg, flags))
+   {
+-    if (generate_multipart_alternative(msg))
+-    {
+-      if (!(flags & SENDBATCH))
+-        goto main_loop;
+-      else
+-        goto cleanup;
+-    }
++    if (!(flags & SENDBATCH))
++      goto main_loop;
++    else
++      goto cleanup;
+   }
+ 
+   if (msg->content->next)

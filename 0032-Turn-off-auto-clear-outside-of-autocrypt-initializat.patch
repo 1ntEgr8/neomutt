@@ -1,0 +1,89 @@
+From 8914a1ba38ef394db3d89ff8d0e54774ca9dca48 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sat, 21 Dec 2019 19:40:52 -0800
+Subject: Turn off auto-clear outside of autocrypt initialization
+
+The auto-clearing code was added in commit 01bc088c, for autocrypt
+initial prompting.  It removed having to keep track of every place a
+browser or other menu might be displayed and having to remember to
+clear it out.
+
+However, clearing when mutt exits is a change of behavior for those
+who have turned off alternative screens.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/8914a1ba38ef394db3d89ff8d0e54774ca9dca48
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ autocrypt/autocrypt.c |  7 +++++++
+ menu.c                | 12 ++++++++++--
+ mutt.h                |  1 +
+ 3 files changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/autocrypt/autocrypt.c b/autocrypt/autocrypt.c
+index 0df17923..7a3be260 100644
+--- a/autocrypt/autocrypt.c
++++ b/autocrypt/autocrypt.c
+@@ -80,6 +80,11 @@ int mutt_autocrypt_init (int can_create)
+     return -1;
+ 
+   set_option (OPTIGNOREMACROEVENTS);
++  /* The init process can display menus at various points
++   * (e.g. browser, pgp key selection).  This allows the screen to be
++   * autocleared after each menu, so the subsequent prompts can be
++   * read. */
++  set_option (OPTMENUPOPCLEARSCREEN);
+ 
+   if (autocrypt_dir_init (can_create))
+     goto bail;
+@@ -91,11 +96,13 @@ int mutt_autocrypt_init (int can_create)
+     goto bail;
+ 
+   unset_option (OPTIGNOREMACROEVENTS);
++  unset_option (OPTMENUPOPCLEARSCREEN);
+ 
+   return 0;
+ 
+ bail:
+   unset_option (OPTIGNOREMACROEVENTS);
++  unset_option (OPTMENUPOPCLEARSCREEN);
+   unset_option (OPTAUTOCRYPT);
+   mutt_autocrypt_db_close ();
+   return -1;
+diff --git a/menu.c b/menu.c
+index eeee8dd3..e567bc2a 100644
+--- a/menu.c
++++ b/menu.c
+@@ -789,8 +789,16 @@ void mutt_pop_current_menu (MUTTMENU *menu)
+   else
+   {
+     CurrentMenu = MENU_MAIN;
+-    move (0, 0);
+-    clrtobot ();
++    /* Clearing when Mutt exits would be an annoying change in
++     * behavior for those who have disabled alternative screens.  The
++     * option is currently set by autocrypt initialization which mixes
++     * menus and prompts outside of the normal menu system state.
++     */
++    if (option (OPTMENUPOPCLEARSCREEN))
++    {
++      move (0, 0);
++      clrtobot ();
++    }
+   }
+ }
+ 
+diff --git a/mutt.h b/mutt.h
+index e068b7e6..836c6c81 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -617,6 +617,7 @@ enum
+   OPTDONTHANDLEPGPKEYS,	/* (pseudo) used to extract PGP keys */
+   OPTIGNOREMACROEVENTS, /* (pseudo) don't process macro/push/exec events while set */
+   OPTAUTOCRYPTGPGME,    /* (pseudo) use Autocrypt context inside crypt-gpgme.c */
++  OPTMENUPOPCLEARSCREEN, /* (pseudo) clear the screen when popping the last menu. */
+ 
+   OPTMAX
+ };
+-- 
+2.24.1
+

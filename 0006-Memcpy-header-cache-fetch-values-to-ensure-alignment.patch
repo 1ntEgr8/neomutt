@@ -1,0 +1,218 @@
+From a6bccbe1d1b731e69b2b609278ef0811d547a6e7 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Mon, 30 Sep 2019 18:50:27 -0700
+Subject: Memcpy header cache fetch values to ensure alignment
+
+While testing the hcache buffer pool changes, I noticed a misaligned
+pointer warning when using LMDB.
+
+The other header cache backends must ensure alignment of the pointer
+they return, but LMDB apparently does not.
+
+Instead of directly assigning and dereferencing the pointer fetched,
+use memcpy to the appropriate type, just as the header cache restore
+operation does.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/a6bccbe1d1b731e69b2b609278ef0811d547a6e7
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ imap/imap.c    | 40 ++++++++++++++++++++++++----------------
+ imap/message.c | 19 +++++++++++--------
+ imap/util.c    | 18 ++++++++++--------
+ mh.c           |  7 ++++---
+ 4 files changed, 49 insertions(+), 35 deletions(-)
+
+diff --git a/imap/imap.c b/imap/imap.c
+index ccba3a38..33469f5f 100644
+--- a/imap/imap.c
++++ b/imap/imap.c
+@@ -1800,9 +1800,9 @@ IMAP_STATUS* imap_mboxcache_get(IMAP_DATA* idata, const char* mbox, int create)
+   IMAP_STATUS scache;
+ #ifdef USE_HCACHE
+   header_cache_t *hc = NULL;
+-  unsigned int *uidvalidity = NULL;
+-  unsigned int *uidnext = NULL;
+-  unsigned long long *modseq = NULL;
++  void *puidvalidity = NULL;
++  void *puidnext = NULL;
++  void *pmodseq = NULL;
+ #endif
+ 
+   for (cur = idata->mboxcache; cur; cur = cur->next)
+@@ -1829,28 +1829,36 @@ IMAP_STATUS* imap_mboxcache_get(IMAP_DATA* idata, const char* mbox, int create)
+   hc = imap_hcache_open(idata, mbox);
+   if (hc)
+   {
+-    uidvalidity = mutt_hcache_fetch_raw(hc, "/UIDVALIDITY", imap_hcache_keylen);
+-    uidnext = mutt_hcache_fetch_raw(hc, "/UIDNEXT", imap_hcache_keylen);
+-    modseq = mutt_hcache_fetch_raw(hc, "/MODSEQ", imap_hcache_keylen);
+-    if (uidvalidity)
++    puidvalidity = mutt_hcache_fetch_raw(hc, "/UIDVALIDITY", imap_hcache_keylen);
++    puidnext = mutt_hcache_fetch_raw(hc, "/UIDNEXT", imap_hcache_keylen);
++    pmodseq = mutt_hcache_fetch_raw(hc, "/MODSEQ", imap_hcache_keylen);
++    if (puidvalidity)
+     {
+       if (!status)
+       {
+-        mutt_hcache_free((void **)&uidvalidity);
+-        mutt_hcache_free((void **)&uidnext);
+-        mutt_hcache_free((void **)&modseq);
++        mutt_hcache_free((void **)&puidvalidity);
++        mutt_hcache_free((void **)&puidnext);
++        mutt_hcache_free((void **)&pmodseq);
+         mutt_hcache_close(hc);
+         return imap_mboxcache_get(idata, mbox, 1);
+       }
+-      status->uidvalidity = *uidvalidity;
+-      status->uidnext = uidnext ? *uidnext: 0;
+-      status->modseq = modseq ? *modseq: 0;
++      memcpy(&status->uidvalidity, puidvalidity, sizeof(unsigned int));
++
++      if (puidnext)
++        memcpy(&status->uidnext, puidnext, sizeof(unsigned int));
++      else
++        status->uidnext = 0;
++
++      if (pmodseq)
++        memcpy(&status->modseq, pmodseq, sizeof(unsigned long long));
++      else
++        status->modseq = 0;
+       mutt_debug(LL_DEBUG3, "mboxcache: hcache uidvalidity %u, uidnext %u, modseq %llu\n",
+                   status->uidvalidity, status->uidnext, status->modseq));
+     }
+-    mutt_hcache_free((void **)&uidvalidity);
+-    mutt_hcache_free((void **)&uidnext);
+-    mutt_hcache_free((void **)&modseq);
++    mutt_hcache_free((void **)&puidvalidity);
++    mutt_hcache_free((void **)&puidnext);
++    mutt_hcache_free((void **)&pmodseq);
+     mutt_hcache_close(hc);
+   }
+ #endif
+diff --git a/imap/message.c b/imap/message.c
+index f32f5db6..48dc0437 100644
+--- a/imap/message.c
++++ b/imap/message.c
+@@ -228,14 +228,15 @@ int imap_read_headers(IMAP_DATA* idata, unsigned int msn_begin, unsigned int ms
+   int evalhc = 0;
+ 
+ #if USE_HCACHE
+-  unsigned int *uid_validity = NULL;
+-  unsigned int *puidnext = NULL;
++  void *puid_validity = NULL;
++  unsigned int uid_validity = 0;
++  void *puidnext = NULL;
+   unsigned int uidnext = 0;
+   int has_condstore = 0;
+   int has_qresync = 0;
+   int eval_condstore = 0;
+   int eval_qresync = 0;
+-  unsigned long long *pmodseq = NULL;
++  void *pmodseq = NULL;
+   unsigned long long hc_modseq = 0;
+   char *uid_seqset = NULL;
+ #endif /* USE_HCACHE */
+@@ -257,11 +258,13 @@ int imap_read_headers(IMAP_DATA* idata, unsigned int msn_begin, unsigned int ms
+ 
+   if (idata->hcache && initial_download)
+   {
+-    uid_validity = mutt_hcache_fetch_raw(idata->hcache, "/UIDVALIDITY", imap_hcache_keylen);
++    puid_validity = mutt_hcache_fetch_raw(idata->hcache, "/UIDVALIDITY", imap_hcache_keylen);
++    if (puid_validity)
++      memcpy(&uid_validity, puid_validity, sizeof(unsigned int));
+     puidnext = mutt_hcache_fetch_raw(idata->hcache, "/UIDNEXT", imap_hcache_keylen);
+     if (puidnext)
+     {
+-      uidnext = *puidnext;
++      memcpy(&uidnext, puidnext, sizeof(unsigned int));;
+       mutt_hcache_free((void **)&puidnext);
+     }
+ 
+@@ -278,13 +281,13 @@ int imap_read_headers(IMAP_DATA* idata, unsigned int msn_begin, unsigned int ms
+         has_qresync = 1;
+     }
+ 
+-    if (uid_validity && uidnext && *uid_validity == idata->uid_validity)
++    if (puid_validity && uidnext && (uid_validity == idata->uid_validity))
+     {
+       evalhc = 1;
+       pmodseq = mutt_hcache_fetch_raw(idata->hcache, "/MODSEQ", imap_hcache_keylen);
+       if (pmodseq)
+       {
+-        hc_modseq = *pmodseq;
++        memcpy(&hc_modseq, pmodseq, sizeof(unsigned long long));;
+         mutt_hcache_free((void **)&pmodseq);
+       }
+       if (hc_modseq)
+@@ -300,7 +303,7 @@ int imap_read_headers(IMAP_DATA* idata, unsigned int msn_begin, unsigned int ms
+           eval_condstore = 1;
+       }
+     }
+-    mutt_hcache_free((void **)&uid_validity);
++    mutt_hcache_free((void **)&puid_validity);
+   }
+   if (evalhc)
+   {
+diff --git a/imap/util.c b/imap/util.c
+index 0812bac3..42f07cc2 100644
+--- a/imap/util.c
++++ b/imap/util.c
+@@ -179,22 +179,24 @@ void imap_hcache_close(IMAP_DATA* idata)
+ struct Email* imap_hcache_get(IMAP_DATA* idata, unsigned int uid)
+ {
+   char key[16];
+-  unsigned int* uv;
++  void *data;
++  unsigned int uv;
+   struct Email* h = NULL;
+ 
+   if (!idata->hcache)
+     return NULL;
+ 
+   sprintf(key, "/%u", uid);
+-  uv =(unsigned int*)mutt_hcache_fetch(idata->hcache, key,
+-                                         imap_hcache_keylen);
+-  if (uv)
++  data = mutt_hcache_fetch(idata->hcache, key,
++                            imap_hcache_keylen);
++  if (data)
+   {
+-    if (*uv == idata->uid_validity)
+-      h = mutt_hcache_restore((unsigned char*)uv, NULL);
++    memcpy(&uv, data, sizeof(unsigned int));
++    if (uv == idata->uid_validity)
++      h = mutt_hcache_restore((unsigned char *)data, NULL);
+     else
+-      mutt_debug(LL_DEBUG3, "hcache uidvalidity mismatch: %u", *uv));
+-    mutt_hcache_free((void **)&uv);
++      mutt_debug(LL_DEBUG3, "hcache uidvalidity mismatch: %u", uv));
++    mutt_hcache_free((void **)&data);
+   }
+ 
+   return h;
+diff --git a/mh.c b/mh.c
+index 37cef860..ad3c8253 100644
+--- a/mh.c
++++ b/mh.c
+@@ -1145,7 +1145,7 @@ static void maildir_delayed_parsing(struct Context * ctx, struct maildir **md,
+ #if USE_HCACHE
+   header_cache_t *hc = NULL;
+   void *data;
+-  struct timeval *when = NULL;
++  struct timeval when;
+   struct stat lastchanged;
+   int ret;
+ #endif
+@@ -1207,9 +1207,10 @@ static void maildir_delayed_parsing(struct Context * ctx, struct maildir **md,
+       data = mutt_hcache_fetch(hc, p->h->path, strlen);
+     else
+       data = mutt_hcache_fetch(hc, p->h->path + 3, &maildir_hcache_keylen);
+-    when =(struct timeval *) data;
++    if (data)
++      memcpy(&when, data, sizeof(struct timeval));
+ 
+-    if (data != NULL && !ret && lastchanged.st_mtime <= when->tv_sec)
++    if (data != NULL && !ret && lastchanged.st_mtime <= when.tv_sec)
+     {
+       p->h = mutt_hcache_restore((unsigned char *)data, &p->h);
+       if (ctx->magic == MUTT_MAILDIR)

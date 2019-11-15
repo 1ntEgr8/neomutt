@@ -1,0 +1,88 @@
+From aae2d87ab891529a4a0247bbce52367dc3aaf3a7 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sun, 10 Nov 2019 18:50:41 -0800
+Subject: Add $count_alternatives to count attachments inside alternatives
+
+Some mail clients(*cough* Apple Mail) have started to put email
+attachments in one of the multipart/alternative branches.
+
+The config changes the searching to recurse inside alternatives when
+performing attachment counting.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/aae2d87ab891529a4a0247bbce52367dc3aaf3a7
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ doc/manual.xml.head |  8 ++++++++
+ init.h              | 13 +++++++++++++
+ mutt.h              |  1 +
+ parse.c             |  2 +-
+ 4 files changed, 23 insertions(+), 1 deletion(-)
+
+diff --git a/doc/manual.xml.head b/doc/manual.xml.head
+index f09784f2..256c2a64 100644
+--- a/doc/manual.xml.head
++++ b/doc/manual.xml.head
+@@ -8187,6 +8187,14 @@ or not though using <xref linkend="body-caching"/> usually means to
+ download the message just once.
+ </para>
+ 
++<para>
++By default, Mutt will not search inside
++<literal>multipart/alternative</literal> containers.  This can be
++changed via the <link
++linkend="count-alternatives">$count_alternatives</link> configuration
++variable.
++</para>
++
+ <para>
+ The syntax is:
+ </para>
+diff --git a/init.h b/init.h
+index 7408778e..27c734bc 100644
+--- a/init.h
++++ b/init.h
+@@ -566,6 +566,19 @@ struct option_t MuttVars[] = {
+   ** will be saved for later references.  Also see $$record,
+   ** $$save_name, $$force_name and ``$fcc-hook''.
+   */
++  { "count_alternatives", DT_BOOL, R_NONE, {.l=OPTCOUNTALTERNATIVES}, {.l=0} },
++  /*
++  ** .pp
++  ** When \fIset\fP, Mutt will recurse inside multipart/alternatives while
++  ** performing attachment searching and counting(see $attachments).
++  ** .pp
++  ** Traditionally, multipart/alternative parts have simply represented
++  ** different encodings of the main content of the email.  Unfortunately,
++  ** some mail clients have started to place email attachments inside
++  ** one of alternatives.  Setting this will allow Mutt to find
++  ** and count matching attachments hidden there, and include them
++  ** in the index via %X or through ~X pattern matching.
++  */
+   { "pgp_autoencrypt",                DT_SYNONYM,  R_NONE, {.p="crypt_autoencrypt"}, {.p=0} },
+   { "crypt_autoencrypt",        DT_BOOL, R_NONE, {.l=C_CryptAutoencrypt}, {.l=0} },
+   /*
+diff --git a/mutt.h b/mutt.h
+index 37bd61b9..41bec8cc 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -400,6 +400,7 @@ enum
+   C_CollapseUnread,
+   C_Confirmappend,
+   C_Confirmcreate,
++  OPTCOUNTALTERNATIVES,
+   C_DeleteUntag,
+   C_DigestCollapse,
+   C_DuplicateThreads,
+diff --git a/parse.c b/parse.c
+index a45b3f3d..f6f0c811 100644
+--- a/parse.c
++++ b/parse.c
+@@ -1738,7 +1738,7 @@ static int count_body_parts(struct Body *body, int flags)
+       /* Always recurse multiparts, except multipart/alternative. */
+       shallrecurse = 1;
+       if (!ascii_strcasecmp(bp->subtype, "alternative"))
+-        shallrecurse = 0;
++        shallrecurse = option(OPTCOUNTALTERNATIVES);
+ 
+       /* Don't count containers if they're top-level. */
+       if (flags & MUTT_PARTS_TOPLEVEL)

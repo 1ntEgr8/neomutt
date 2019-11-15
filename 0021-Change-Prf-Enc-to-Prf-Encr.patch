@@ -1,0 +1,40 @@
+From 0950403f5d92fd78e1cbab6b91370bfc8314d5e7 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sat, 30 Nov 2019 09:56:16 -0800
+Subject: Change "Prf Enc" to "Prf Encr"
+
+Make the abbreviation a bit clearer, that it means Encryption instead
+of Encoding.
+
+Thanks to Morten Bo Johansen for the suggestion.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/0950403f5d92fd78e1cbab6b91370bfc8314d5e7
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ autocrypt/autocrypt_acct_menu.c | 6 +++---
+ 8 files changed, 24 insertions(+), 24 deletions(-)
+
+diff --git a/autocrypt/autocrypt_acct_menu.c b/autocrypt/autocrypt_acct_menu.c
+index 6c53e9dd..4d7011dd 100644
+--- a/autocrypt/autocrypt_acct_menu.c
++++ b/autocrypt/autocrypt_acct_menu.c
+@@ -49,16 +49,16 @@ static const struct mapping_t AutocryptAcctHelp[] = {
+      toggle an account active/inactive
+      The words here are abbreviated to keep the help line compact.
+      It currently has the content:
+-     q:Exit  c:Create  D:Delete  a:Tgl Active  p:Prf Enc  ?:Help
++     q:Exit  c:Create  D:Delete  a:Tgl Active  p:Prf Encr  ?:Help
+   */
+   { N_("Tgl Active"),  OP_AUTOCRYPT_TOGGLE_ACTIVE },
+   /* L10N: Autocrypt Account Menu Help line:
+      toggle "prefer-encrypt" on an account
+      The words here are abbreviated to keep the help line compact.
+      It currently has the content:
+-     q:Exit  c:Create  D:Delete  a:Tgl Active  p:Prf Enc  ?:Help
++     q:Exit  c:Create  D:Delete  a:Tgl Active  p:Prf Encr  ?:Help
+   */
+-  { N_("Prf Enc"), OP_AUTOCRYPT_TOGGLE_PREFER },
++  { N_("Prf Encr"), OP_AUTOCRYPT_TOGGLE_PREFER },
+   { N_("Help"),   OP_HELP },
+   { NULL,	  0 }
+ };

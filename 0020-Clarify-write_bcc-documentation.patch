@@ -1,0 +1,31 @@
+From 220a4c912bdca30362e6287056dcff06c7f51343 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Mon, 25 Nov 2019 15:36:48 -0800
+Subject: Clarify $write_bcc documentation
+
+The wording was ambiguous, and could give the impression that a
+message, if fcc'ed, would contain the Bcc header when sent too.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/220a4c912bdca30362e6287056dcff06c7f51343
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ init.h | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+
+diff --git a/init.h b/init.h
+index 89e85bfb..bf7f1288 100644
+--- a/init.h
++++ b/init.h
+@@ -4348,7 +4348,8 @@ struct option_t MuttVars[] = {
+   ** header in this case.
+   ** .pp
+   ** Note this option only affects the sending of messages.  Fcc'ed
+-  ** messages will always write the ``Bcc:'' header if one exists.
++  ** copies of a message will always contain the ``Bcc:'' header if
++  ** one exists.
+   */
+   { "write_inc",	DT_NUM,	 R_NONE, {.p=&WriteInc}, {.l=10} },
+   /*
+-- 
+2.24.1
+

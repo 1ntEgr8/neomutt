@@ -1,0 +1,40 @@
+From 29167ecfc262c36b0570844e87b511e34878949b Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Thu, 7 Nov 2019 15:06:53 -0800
+Subject: Block multipart type alternatives generation
+
+Since generating multipart types using
+$send_multipart_alternative_filter will not send properly, display an
+error message and block alternatives of that type.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/29167ecfc262c36b0570844e87b511e34878949b
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ sendlib.c | 14 ++++++++++++++
+ 1 file changed, 14 insertions(+)
+
+diff --git a/sendlib.c b/sendlib.c
+index 90eefefd..bffa604f 100644
+--- a/sendlib.c
++++ b/sendlib.c
+@@ -1473,6 +1473,20 @@ struct Body *mutt_run_send_alternative_filter(struct Body *b)
+   alternative->disposition = DISPINLINE;
+ 
+   mutt_parse_content_type(mime, alternative);
++  if (alternative->type == TYPEMULTIPART)
++  {
++    /* L10N:
++       Some clever people may try to generate a multipart/mixed
++       "alternative" using $send_multipart_alternative_filter.  The
++       actual sending for this will not work, because the data
++       structures will not be properly generated.  To preempt bug
++       reports, this error is displayed, and the generation is blocked
++       at the filter level.
++     */
++    mutt_error _("$send_multipart_alternative_filter does not support multipart type generation.");
++    mutt_free_body(&alternative);
++    goto cleanup;
++  }
+   mutt_update_encoding(alternative);
+ 
+ cleanup:

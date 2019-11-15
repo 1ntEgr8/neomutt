@@ -1,0 +1,109 @@
+From 9d8b9b99a01f6dac26379c4aa0a8be1b6b3e2773 Mon Sep 17 00:00:00 2001
+From: ed <ed@s5h.net>
+Date: Sat, 30 Nov 2019 16:49:57 +0000
+Subject: Adding ISO 8601 calendar date
+
+This adds support for date in YYYYMMDD, ISO8601 calendar date formatting.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/9d8b9b99a01f6dac26379c4aa0a8be1b6b3e2773
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ doc/manual.xml.head | 11 ++++++-----
+ doc/muttrc.man.head |  2 ++
+ pattern.c           | 37 +++++++++++++++++++++++++++++++++++++
+ 3 files changed, 45 insertions(+), 5 deletions(-)
+
+diff --git a/doc/manual.xml.head b/doc/manual.xml.head
+index 3fcc9e6b..699e1554 100644
+--- a/doc/manual.xml.head
++++ b/doc/manual.xml.head
+@@ -5880,19 +5880,20 @@ Mutt supports two types of dates, <emphasis>absolute</emphasis> and
+ 
+ <para>
+ Dates <emphasis>must</emphasis> be in DD/MM/YY format (month and year
+-are optional, defaulting to the current month and year).  An example of
+-a valid range of dates is:
++are optional, defaulting to the current month and year) or YYYYMMDD.  An
++example of a valid range of dates is:
+ </para>
+ 
+ <screen>
+ Limit to messages matching: ~d 20/1/95-31/10
++Limit to messages matching: ~d 19950120-19951031
+ </screen>
+ 
+ <para>
+ If you omit the minimum (first) date, and just specify
+-<quote>-DD/MM/YY</quote>, all messages <emphasis>before</emphasis> the
+-given date will be selected.  If you omit the maximum (second) date, and
+-specify <quote>DD/MM/YY-</quote>, all messages
++<quote>-DD/MM/YY</quote> or <quote>-YYYYMMDD</quote>, all messages
++<emphasis>before</emphasis> the given date will be selected.  If you omit the
++maximum (second) date, and specify <quote>DD/MM/YY-</quote>, all messages
+ <emphasis>after</emphasis> the given date will be selected.  If you
+ specify a single date with no dash (<quote>-</quote>), only messages
+ sent on the given date will be selected.
+diff --git a/doc/muttrc.man.head b/doc/muttrc.man.head
+index 176dde26..4e5ee934 100644
+--- a/doc/muttrc.man.head
++++ b/doc/muttrc.man.head
+@@ -717,6 +717,8 @@ greater than or equal to 70 as lying in the 20th century.
+ Note that this behavior \fIis\fP Y2K compliant, but that mutt
+ \fIdoes\fP have a Y2.07K problem.
+ .PP
++Alternatively, you may use \fIYYYYMMDD\fP to specify a date.
++.PP
+ If a date range consists of a single date, the operator in question
+ will match that precise date.  If the date range consists of a dash
+ (\(lq\fB-\fP\(rq), followed by a date, this range will match any
+diff --git a/pattern.c b/pattern.c
+index e2dfece4..a7aa4fd0 100644
+--- a/pattern.c
++++ b/pattern.c
+@@ -399,6 +399,43 @@ static const char *getDate (const char *s, struct tm *t, BUFFER *err)
+   char *p;
+   time_t now = time (NULL);
+   struct tm *tm = localtime (&now);
++  int iso8601=1;
++  int v=0;
++
++  for (v=0; v<8; v++)
++  {
++    if (s[v] && s[v] >= '0' && s[v] <= '9')
++    {
++      continue;
++    }
++    iso8601 = 0;
++    break;
++  }
++
++  if (iso8601)
++  {
++    int year;
++    int month;
++    int mday;
++    sscanf (s, "%4d%2d%2d", &year, &month, &mday);
++
++    t->tm_year = year - 1900;
++    t->tm_mon = month - 1;
++    t->tm_mday = mday;
++
++    if (t->tm_mday < 1 || t->tm_mday > 31)
++    {
++      snprintf (err->data, err->dsize, _("Invalid day of month: %s"), s);
++      return NULL;
++    }
++    if (t->tm_mon < 0 || t->tm_mon > 11)
++    {
++      snprintf (err->data, err->dsize, _("Invalid month: %s"), p);
++      return NULL;
++    }
++
++    return (s+8);
++  }
+ 
+   t->tm_mday = strtol (s, &p, 10);
+   if (t->tm_mday < 1 || t->tm_mday > 31)
+-- 
+2.24.1
+

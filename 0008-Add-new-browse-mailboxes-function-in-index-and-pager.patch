@@ -1,0 +1,139 @@
+From 0e32b977454de79899c497debcd460470e720e7a Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Thu, 10 Oct 2019 15:03:05 +0800
+Subject: Add new browse-mailboxes function in index and pager
+
+This allows direct access to the mailboxes list in the folder menu.
+This is useful, for instance, if $browser_sticky_cursor is set and the
+current directory does not contain the open mailbox.  The macro
+version will lose the current mailbox while toggling to the mailboxes
+list.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/0e32b977454de79899c497debcd460470e720e7a
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ OPS             |  2 ++
+ curs_main.c     | 31 +++++++++++++++++++------------
+ doc/Muttrc.head |  5 +++--
+ functions.h     |  4 ++++
+ 4 files changed, 28 insertions(+), 14 deletions(-)
+
+diff --git a/OPS b/OPS
+index a91a14ab..4e3bd1d0 100644
+--- a/OPS
++++ b/OPS
+@@ -109,6 +109,8 @@ OP_LIST_REPLY "reply to specified mailing list"
+ OP_MACRO "execute a macro"
+ OP_MAIL "compose a new mail message"
+ OP_MAIN_BREAK_THREAD "break the thread in two"
++OP_MAIN_BROWSE_MAILBOXES "select a new mailbox from the browser"
++OP_MAIN_BROWSE_MAILBOXES_READONLY "select a new mailbox from the browser in read only mode"
+ OP_MAIN_CHANGE_FOLDER "open a different folder"
+ OP_MAIN_CHANGE_FOLDER_READONLY "open a different folder in read only mode"
+ OP_MAIN_CLEAR_FLAG "clear a status flag from a message"
+diff --git a/curs_main.c b/curs_main.c
+index 919cf154..4e0f6e86 100644
+--- a/curs_main.c
++++ b/curs_main.c
+@@ -1266,8 +1266,13 @@ int mutt_index_menu(void)
+         if (attach_msg)
+           op = OP_MAIN_CHANGE_FOLDER_READONLY;
+ 
++      case OP_MAIN_BROWSE_MAILBOXES:
++        if (attach_msg && (op != OP_MAIN_CHANGE_FOLDER_READONLY))
++          op = OP_MAIN_BROWSE_MAILBOXES_READONLY;
++
+         /* fallback to the readonly case */
+ 
++      case OP_MAIN_BROWSE_MAILBOXES_READONLY:
+       case OP_MAIN_CHANGE_FOLDER_READONLY:
+       {
+         struct Buffer *folderbuf;
+@@ -1293,13 +1298,13 @@ int mutt_index_menu(void)
+         }
+ #ifdef USE_SIDEBAR
+         else if (op == OP_SIDEBAR_OPEN)
+-        {
+-          const char *path = mutt_sb_get_highlight();
+-          if (!path || !*path)
+-            goto changefoldercleanup;
+-          mutt_buffer_strcpy(folderbuf, path);
+-        }
++          mutt_buffer_strcpy(folderbuf, NONULL(mutt_sb_get_highlight()));
+ #endif
++
++        else if ((op == OP_MAIN_BROWSE_MAILBOXES) ||
++                (op == OP_MAIN_BROWSE_MAILBOXES_READONLY))
++          mutt_buffer_select_file(folderbuf, MUTT_SEL_FOLDER | MUTT_SEL_BUFFY);
++
+         else
+         {
+           if (option(C_ChangeFolderNext) && Context && Context->path)
+@@ -1318,13 +1323,13 @@ int mutt_index_menu(void)
+             }
+             goto changefoldercleanup;
+           }
+-          if (!mutt_buffer_len(folderbuf))
+-          {
+-            mutt_window_clearline(MuttMessageWindow, 0);
+-            goto changefoldercleanup;
+-          }
+         }
+ 
++        if (!mutt_buffer_len(folderbuf))
++        {
++          mutt_window_clearline(MuttMessageWindow, 0);
++          goto changefoldercleanup;
++        }
+         mutt_buffer_expand_path(folderbuf);
+         if (mx_get_magic(mutt_b2s(folderbuf)) <= 0)
+         {
+@@ -1386,7 +1391,9 @@ int mutt_index_menu(void)
+         mutt_folder_hook(mutt_b2s(folderbuf));
+ 
+         if ((Context = mx_open_mailbox(mutt_b2s(folderbuf),
+-                                       (option(C_ReadOnly) || op == OP_MAIN_CHANGE_FOLDER_READONLY) ?
++                                       (option(C_ReadOnly) ||
++                                         op == OP_MAIN_CHANGE_FOLDER_READONLY ||
++                                         op == OP_MAIN_BROWSE_MAILBOXES_READONLY) ?
+                                         MUTT_READONLY : 0, NULL)) != NULL)
+         {
+           menu->current = ci_first_message();
+diff --git a/doc/Muttrc.head b/doc/Muttrc.head
+index 2b0020f7..0d2b2f52 100644
+--- a/doc/Muttrc.head
++++ b/doc/Muttrc.head
+@@ -26,8 +26,9 @@ macro index,pager,attach,compose \cb "\
+ macro generic,pager <F1> "<shell-escape> less @docdir@/manual.txt<Enter>" "show Mutt documentation"
+ 
+ # show the incoming mailboxes list(just like "mutt -y") and back when pressing "y"
+-macro index y "<change-folder>?<toggle-mailboxes>" "show incoming mailboxes list"
+-macro pager y "<exit><change-folder>?<toggle-mailboxes>" "show incoming mailboxes list"
++# note: these macros have been subsumed by the <browse-mailboxes> function.
++# macro index y "<change-folder>?<toggle-mailboxes>" "show incoming mailboxes list"
++# macro pager y "<exit><change-folder>?<toggle-mailboxes>" "show incoming mailboxes list"
+ bind browser y exit
+ 
+ # Handler for gzip compressed mailboxes
+diff --git a/functions.h b/functions.h
+index 419dfc50..ba8340b8 100644
+--- a/functions.h
++++ b/functions.h
+@@ -91,6 +91,8 @@ const struct binding_t OpMain[] = { /* map: index */
+ #endif
+   { "bounce-message",                OP_BOUNCE_MESSAGE,                "b" },
+   { "break-thread",                OP_MAIN_BREAK_THREAD,                "#" },
++  { "browse-mailboxes",                OP_MAIN_BROWSE_MAILBOXES,        "y" },
++  { "browse-mailboxes-readonly", OP_MAIN_BROWSE_MAILBOXES_READONLY, NULL },
+   { "change-folder",                OP_MAIN_CHANGE_FOLDER,                "c" },
+   { "change-folder-readonly",        OP_MAIN_CHANGE_FOLDER_READONLY,        "\033c" },
+   { "next-unread-mailbox",        OP_MAIN_NEXT_UNREAD_MAILBOX,    NULL },
+@@ -195,6 +197,8 @@ const struct binding_t OpMain[] = { /* map: index */
+ 
+ const struct binding_t OpPager[] = { /* map: pager */
+   { "break-thread",        OP_MAIN_BREAK_THREAD,                "#" },
++  { "browse-mailboxes",        OP_MAIN_BROWSE_MAILBOXES,        "y" },
++  { "browse-mailboxes-readonly", OP_MAIN_BROWSE_MAILBOXES_READONLY, NULL },
+   { "create-alias",        OP_CREATE_ALIAS,                "a" },
+   { "bounce-message",        OP_BOUNCE_MESSAGE,                "b" },
+   { "change-folder",        OP_MAIN_CHANGE_FOLDER,                "c" },

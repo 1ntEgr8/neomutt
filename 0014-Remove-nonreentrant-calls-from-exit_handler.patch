@@ -1,0 +1,101 @@
+From 5835f4c0594ff94a2aa62ad122c4dc2871ee8492 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Sun, 10 Nov 2019 15:09:54 -0800
+Subject: Remove nonreentrant calls from exit_handler()
+
+_() can invoke malloc, so remove l10n translations.
+
+printf() is not safe either, so use write().
+
+I'm not sure at this point about curs_set() and endwin(), but they
+seem important enough for proper terminal cleanup to risk leaving in.
+
+Thanks to Oswald Buddenhagen for pointing out the problem, and the old
+trac ticket from Vincent at:
+<https://gitlab.com/muttmua/trac-tickets/raw/master/tickets/open/3791-SIGQUIT_Ctrl_while_opening_mailbox_made_Mutt_hang.txt>
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/5835f4c0594ff94a2aa62ad122c4dc2871ee8492
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ signal.c | 47 +++++++++++++++++++++++++++++++++++++++++++----
+ 1 file changed, 43 insertions(+), 4 deletions(-)
+
+diff --git a/signal.c b/signal.c
+index 622527ad..8d8e776e 100644
+--- a/signal.c
++++ b/signal.c
+@@ -27,6 +27,7 @@
+ #include <string.h>
+ #include <sys/wait.h>
+ #include <errno.h>
++#include <unistd.h>
+ 
+ static sigset_t Sigset;
+ static sigset_t SigsetSys;
+@@ -34,24 +35,62 @@ static struct sigaction SysOldInt;
+ static struct sigaction SysOldQuit;
+ static int IsEndwin = 0;
+ 
++static void exit_print_int_recursive(int n)
++{
++  char digit;
++
++  if (n > 9)
++    exit_print_int_recursive(n / 10);
++
++  digit = '0' +(n % 10);
++  write(1, &digit, 1);
++}
++
++static void exit_print_int(int n)
++{
++  if (n < 0)
++  {
++    write(1, "-", 1);
++    n = -n;
++  }
++  exit_print_int_recursive(n);
++}
++
++static void exit_print_string(const char *str)
++{
++  size_t len = 0;
++
++  if (!str)
++    return;
++
++  while (str[len])
++    len++;
++
++  if (len > 0)
++    write(1, str, len);
++}
++
+ /* Attempt to catch "ordinary" signals and shut down gracefully. */
+ static void exit_handler(int sig)
+ {
+   curs_set(1);
+   endwin(); /* just to be safe */
++
++  exit_print_string("Caught signal ");
+ #if SYS_SIGLIST_DECLARED
+-  printf(_("%s...  Exiting.\n"), sys_siglist[sig]);
++  exit_print_string(sys_siglist[sig]);
+ #else
+ #if (__sun__ && __svr4__)
+-  printf(_("Caught %s...  Exiting.\n"), _sys_siglist[sig]);
++  exit_print_string(_sys_siglist[sig]);
+ #else
+ #if (__alpha && __osf__)
+-  printf(_("Caught %s...  Exiting.\n"), __sys_siglist[sig]);
++  exit_print_string(__sys_siglist[sig]);
+ #else
+-  printf(_("Caught signal %d...  Exiting.\n"), sig);
++  exit_print_int(sig);
+ #endif
+ #endif
+ #endif
++  exit_print_string("...  Exiting.\n");
+   exit(0);
+ }
+ 

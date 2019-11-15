@@ -1,0 +1,96 @@
+From 427d472da7c84e813a9381f629969c4bc6005dff Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Tue, 14 Jan 2020 14:48:24 -0800
+Subject: Add $crypt_opportunistic_encrypt_strong_keys config var
+
+When set, this modifies $crypt_opportunistic_encrypt to only search
+for "strong" keys (fully valid keys according to the web of trust).
+
+S/MIME behavior depends on the backend.
+---
+ crypt-gpgme.c |  3 ++-
+ init.h        | 14 ++++++++++++++
+ mutt.h        |  1 +
+ pgpkey.c      |  3 ++-
+ smime.c       |  3 ++-
+ 5 files changed, 21 insertions(+), 3 deletions(-)
+
+diff --git a/crypt-gpgme.c b/crypt-gpgme.c
+index 35441d2c..488ac665 100644
+--- a/crypt-gpgme.c
++++ b/crypt-gpgme.c
+@@ -4769,7 +4769,8 @@ static crypt_key_t *crypt_getkeybyaddr (ADDRESS * a, short abilities,
+         {
+           if (the_strong_valid_key)
+             k = crypt_copy_key (the_strong_valid_key);
+-          else if (a_valid_addrmatch_key)
++          else if (a_valid_addrmatch_key &&
++                   !option (OPTCRYPTOPPENCSTRONGKEYS))
+             k = crypt_copy_key (a_valid_addrmatch_key);
+           else
+             k = NULL;
+diff --git a/init.h b/init.h
+index b797dd1c..0f581022 100644
+--- a/init.h
++++ b/init.h
+@@ -649,6 +649,20 @@ struct option_t MuttVars[] = {
+   ** be manually re-enabled in the pgp or smime menus.
+   ** (Crypto only)
+    */
++  { "crypt_opportunistic_encrypt_strong_keys", DT_BOOL, R_NONE, {.l=OPTCRYPTOPPENCSTRONGKEYS}, {.l=0} },
++  /*
++  ** .pp
++  ** When set, this modifies the behavior of $$crypt_opportunistic_encrypt
++  ** to only search for "strong keys", that is, keys with full validity
++  ** according to the web-of-trust algorithm.  A key with marginal or no
++  ** validity will not enable opportunistic encryption.
++  ** .pp
++  ** For S/MIME, the behavior depends on the backend.  Classic S/MIME will
++  ** filter for certificates with the 't' (trusted) flag in the .index file.
++  ** The GPGME backend will use the same filters as with OpenPGP, and depends
++  ** on GPGME's logic for assigning the GPGME_VALIDITY_FULL and
++  ** GPGME_VALIDITY_ULTIMATE validity flag.
++  */
+   { "crypt_protected_headers_read", DT_BOOL, R_NONE, {.l=OPTCRYPTPROTHDRSREAD}, {.l=1} },
+   /*
+   ** .pp
+diff --git a/mutt.h b/mutt.h
+index d6f50b88..576ac742 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -569,6 +569,7 @@ enum
+   OPTCRYPTAUTOSMIME,
+   OPTCRYPTCONFIRMHOOK,
+   OPTCRYPTOPPORTUNISTICENCRYPT,
++  OPTCRYPTOPPENCSTRONGKEYS,
+   OPTCRYPTPROTHDRSREAD,
+   OPTCRYPTPROTHDRSSAVE,
+   OPTCRYPTPROTHDRSWRITE,
+diff --git a/pgpkey.c b/pgpkey.c
+index 108db390..06c6a977 100644
+--- a/pgpkey.c
++++ b/pgpkey.c
+@@ -915,7 +915,8 @@ pgp_key_t pgp_getkeybyaddr (ADDRESS * a, short abilities, pgp_ring_t keyring,
+         pgp_remove_key (&matches, the_strong_valid_key);
+         k = the_strong_valid_key;
+       }
+-      else if (a_valid_addrmatch_key)
++      else if (a_valid_addrmatch_key &&
++               !option (OPTCRYPTOPPENCSTRONGKEYS))
+       {
+         pgp_remove_key (&matches, a_valid_addrmatch_key);
+         k = a_valid_addrmatch_key;
+diff --git a/smime.c b/smime.c
+index 6b2acaf0..90d6769b 100644
+--- a/smime.c
++++ b/smime.c
+@@ -710,7 +710,8 @@ static smime_key_t *smime_get_key_by_addr(char *mailbox, short abilities, short
+     {
+       if (trusted_match)
+         return_key = smime_copy_key (trusted_match);
+-      else if (valid_match)
++      else if (valid_match &&
++               !option (OPTCRYPTOPPENCSTRONGKEYS))
+         return_key = smime_copy_key (valid_match);
+       else
+         return_key = NULL;

@@ -1,0 +1,105 @@
+From 2e6d4903a1e81f673ba2b66ab372dd09f95d6d5a Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Mon, 9 Sep 2019 14:06:31 -0700
+Subject: Convert remaining mutt_encode_path() call to use struct Buffer
+
+Then rename the other uses of mutt_buffer_encode_path() to
+mutt_encode_path().
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/2e6d4903a1e81f673ba2b66ab372dd09f95d6d5a
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ bcache.c  |  2 +-
+ hcache.c  | 16 +++++++++-------
+ muttlib.c | 11 +----------
+ protos.h  |  3 +--
+ 4 files changed, 12 insertions(+), 20 deletions(-)
+
+diff --git a/bcache.c b/bcache.c
+index 0fef6c32..b6925d4a 100644
+--- a/bcache.c
++++ b/bcache.c
+@@ -62,7 +62,7 @@ static int bcache_path(struct Account *account, const char *mailbox, struct BodyCache *bcac
+ 
+   path = mutt_buffer_pool_get();
+   dst = mutt_buffer_pool_get();
+-  mutt_buffer_encode_path(path, NONULL(mailbox));
++  mutt_encode_path(path, NONULL(mailbox));
+ 
+   mutt_buffer_printf(dst, "%s/%s%s", C_MessageCachedir, host, mutt_b2s(path));
+   if (*(dst->dptr - 1) != '/')
+diff --git a/hcache.c b/hcache.c
+index 07f3fbd3..b8d7a9da 100644
+--- a/hcache.c
++++ b/hcache.c
+@@ -995,25 +995,27 @@ mutt_hcache_store_raw(header_cache_t* h, const char* filename, void* data,
+ #endif
+ }
+ 
+-static char* get_foldername(const char *folder)
++static char* get_foldername(const char *folder)
+ {
+   char *p = NULL;
+-  char path[PATH_MAX];
++  struct Buffer *path;
+   struct stat st;
+ 
+-  mutt_encode_path(path, sizeof(path), folder);
++  path = mutt_buffer_pool_get();
++  mutt_encode_path(path, folder);
+ 
+   /* if the folder is local, canonify the path to avoid
+    * to ensure equivalent paths share the hcache */
+-  if (stat(path, &st) == 0)
++  if (stat(mutt_b2s(path), &st) == 0)
+   {
+     p = safe_malloc(PATH_MAX+1);
+-    if (!realpath(path, p))
+-      mutt_str_replace(&p, path);
++    if (!realpath(mutt_b2s(path), p))
++      mutt_str_replace(&p, mutt_b2s(path));
+   }
+   else
+-    p = safe_strdup(path);
++    p = safe_strdup(mutt_b2s(path));
+ 
++  mutt_buffer_pool_release(&path);
+   return p;
+ }
+ 
+diff --git a/muttlib.c b/muttlib.c
+index 82f90faf..69641230 100644
+--- a/muttlib.c
++++ b/muttlib.c
+@@ -2247,16 +2247,7 @@ int mutt_match_spam_list(const char *s, struct ReplaceList *l, char *text, int textsi
+   return 0;
+ }
+ 
+-void mutt_encode_path(char *dest, size_t dlen, const char *src)
+-{
+-  char *p = safe_strdup(src);
+-  int rc = mutt_convert_string(&p, C_Charset, "utf-8", 0);
+-  /* `src' may be NULL, such as when called from the pop3 driver. */
+-  strfcpy(dest, (rc == 0) ? NONULL(p) : NONULL(src), dlen);
+-  FREE(&p);
+-}
+-
+-void mutt_buffer_encode_path(struct Buffer *dest, const char *src)
++void mutt_encode_path(struct Buffer *dest, const char *src)
+ {
+   char *p;
+   int rc;
+diff --git a/protos.h b/protos.h
+index 66348bc3..f747bcb9 100644
+--- a/protos.h
++++ b/protos.h
+@@ -204,8 +204,7 @@ int mutt_label_complete(char *, size_t, int);
+ void mutt_curses_error(const char *, ...);
+ void mutt_curses_message(const char *, ...);
+ void mutt_encode_descriptions(struct Body *, short);
+-void mutt_encode_path(char *, size_t, const char *);
+-void mutt_buffer_encode_path(struct Buffer *, const char *);
++void mutt_encode_path(struct Buffer *, const char *);
+ void mutt_enter_command(void);
+ void mutt_error_history_display(void);
+ void mutt_error_history_init(void);

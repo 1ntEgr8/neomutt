@@ -1,0 +1,479 @@
+From 0e566a03725b4ad789aa6ac1d17cdf7bf4e7e354 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Tue, 29 Oct 2019 13:53:20 +0800
+Subject: Add ability to generate multipart/alternative using a filter script
+
+Create config variables $send_multipart_alternative(a quadoption)
+and $send_multipart_alternative_filter.  The filter script expects
+output to be the mime type, a blank line, then the content.
+
+Add ability to preview alternative from compose menu.  <view-alt-text>
+forces viewing as text.  <view-alt-mailcap> forces using the mailcap.
+Bind them to 'v' and 'V', respectively.
+
+Improve <resend-message> so a multipart/alternative is stripped out,
+which would just confuse the compose menu.  Currently this preserves
+the first alternative.
+
+Allow alternative generation in batch mode, as long as the quadoption
+is set to 'yes'.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/0e566a03725b4ad789aa6ac1d17cdf7bf4e7e354
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ OPS                 |   2 +
+ compose.c           |  20 +++++++
+ doc/manual.xml.head |  28 +++++++++
+ functions.h         |   2 +
+ globals.h           |   1 +
+ init.h              |  21 +++++++
+ mutt.h              |   1 +
+ postpone.c          |  14 ++---
+ protos.h            |   3 +
+ send.c              |  43 +++++++++++++-
+ sendlib.c           | 136 ++++++++++++++++++++++++++++++++++++++++++++
+ 11 files changed, 261 insertions(+), 10 deletions(-)
+
+diff --git a/OPS b/OPS
+index 4e3bd1d0..990bdb35 100644
+--- a/OPS
++++ b/OPS
+@@ -49,6 +49,8 @@ OP_COMPOSE_TO_SENDER "compose new message to the current message sender"
+ OP_COMPOSE_TOGGLE_DISPOSITION "toggle disposition between inline/attachment"
+ OP_COMPOSE_TOGGLE_UNLINK "toggle whether to delete file after sending it"
+ OP_COMPOSE_UPDATE_ENCODING "update an attachment's encoding info"
++OP_COMPOSE_VIEW_ALT_TEXT "view multipart/alternative as text"
++OP_COMPOSE_VIEW_ALT_MAILCAP "view multipart/alternative using mailcap"
+ OP_COMPOSE_WRITE_MESSAGE "write the message to a folder"
+ OP_COPY_MESSAGE "copy a message to a file/mailbox"
+ OP_CREATE_ALIAS "create an alias from a message sender"
+diff --git a/compose.c b/compose.c
+index 19de4c0c..6b7e321a 100644
+--- a/compose.c
++++ b/compose.c
+@@ -1507,6 +1507,26 @@ int mutt_compose_menu(struct Email *msg,   /* structure for new message */
+         mutt_message_hook(NULL, msg, MUTT_SEND2HOOK);
+         break;
+ 
++      case OP_COMPOSE_VIEW_ALT_TEXT:
++      case OP_COMPOSE_VIEW_ALT_MAILCAP:
++      {
++        struct Body *alternative;
++
++        if (!SendMultipartAltFilter)
++        {
++          mutt_error _("$send_multipart_alternative_filter is not set");
++          break;
++        }
++        alternative = mutt_run_send_alternative_filter(msg->content);
++        if (!alternative)
++          break;
++        mutt_view_attachment(NULL, alternative,
++                              op == OP_COMPOSE_VIEW_ALT_TEXT ? MUTT_AS_TEXT : MUTT_MAILCAP,
++                              NULL, actx);
++        mutt_free_body(&alternative);
++        break;
++      }
++
+       case OP_VIEW_ATTACH:
+       case OP_DISPLAY_HEADERS:
+         CHECK_COUNT;
+diff --git a/doc/manual.xml.head b/doc/manual.xml.head
+index d6819785..f09784f2 100644
+--- a/doc/manual.xml.head
++++ b/doc/manual.xml.head
+@@ -8135,6 +8135,34 @@ To remove a MIME type from the <command>alternative_order</command>
+ list, use the <command>unalternative_order</command> command.
+ </para>
+ 
++<para>
++Generating <literal>multipart/alternative</literal> content is supported
++via the
++<link linkend="send-multipart-alternative">$send_multipart_alternative</link>
++quadoption and
++<link linkend="send-multipart-alternative-filter">$send_multipart_alternative_filter</link>
++filter script.  The composed <literal>text/plain</literal> content
++will be piped to the filter script's stdin.  The output from the
++filter script should be the generated mime/type of the content, a
++blank line, and the content.  For example:
++</para>
++<screen>
++text/html
++
++&lt;html&gt;
++&lt;body&gt;
++Content in html format
++&lt;/body&gt;
++&lt;/html&gt;
++</screen>
++
++<para>
++A preview of the alternative can be viewed in the compose menu
++using the functions <literal>&lt;view-alt-text&gt;</literal> and
++<literal>&lt;view-alt-mailcap&gt;</literal>, bound to &quot;v&quot;
++and &quot;V&quot; by default.
++</para>
++
+ </sect1>
+ 
+ <sect1 id="attachments">
+diff --git a/functions.h b/functions.h
+index ba8340b8..8f98fdb2 100644
+--- a/functions.h
++++ b/functions.h
+@@ -384,6 +384,8 @@ const struct binding_t OpCompose[] = { /* map: compose */
+   { "toggle-recode",    OP_COMPOSE_TOGGLE_RECODE,        NULL },
+   { "update-encoding",        OP_COMPOSE_UPDATE_ENCODING,        "U" },
+   { "view-attach",        OP_VIEW_ATTACH,                        MUTT_ENTER_S },
++  { "view-alt-text",    OP_COMPOSE_VIEW_ALT_TEXT,       "v" },
++  { "view-alt-mailcap", OP_COMPOSE_VIEW_ALT_MAILCAP,    "V" },
+   { "send-message",        OP_COMPOSE_SEND_MESSAGE,        "y" },
+   { "pipe-entry",        OP_PIPE,                        "|" },
+ 
+diff --git a/globals.h b/globals.h
+index b69d42ea..d99b0cc6 100644
+--- a/globals.h
++++ b/globals.h
+@@ -131,6 +131,7 @@ WHERE char *C_QueryFormat;
+ WHERE char *C_Realname;
+ WHERE short C_SearchContext;
+ WHERE char *C_SendCharset;
++WHERE char *SendMultipartAltFilter;
+ WHERE char *C_Sendmail;
+ WHERE char *C_Shell;
+ #ifdef USE_SIDEBAR
+diff --git a/init.h b/init.h
+index 39e5d8cd..fe8519bb 100644
+--- a/init.h
++++ b/init.h
+@@ -3114,6 +3114,27 @@ struct option_t MuttVars[] = {
+   ** In case the text cannot be converted into one of these exactly,
+   ** mutt uses $$charset as a fallback.
+   */
++  { "send_multipart_alternative", DT_QUAD, R_NONE, {.l=OPT_SENDMULTIPARTALT}, {.l=MUTT_NO} },
++  /*
++  ** .pp
++  ** If \fIset\fP, Mutt will generate a multipart/alternative
++  ** container and an alternative part using the filter script specified in
++  ** $$send_multipart_alternative_filter.
++  ** See the section ``MIME Multipart/Alternative''($alternative-order).
++  ** .pp
++  ** Note that enabling multipart/alternative is not compatible with inline
++  ** PGP encryption.  Mutt will prompt to use PGP/MIME in that case.
++  */
++  { "send_multipart_alternative_filter", DT_STRING|DT_PATH, R_NONE, {.p=&SendMultipartAltFilter}, {.p=0} },
++  /*
++  ** .pp
++  ** This specifies a filter script, which will convert the main
++  **(composed) message of the email to an alternative format.  The
++  ** message will be piped to the filter's stdin.  The expected output
++  ** of the filter is the generated mime type, e.g. text/html,
++  ** followed by a blank line, and then the converted content.
++  ** See the section ``MIME Multipart/Alternative''($alternative-order).
++  */
+   { "sendmail",                DT_STRING|DT_PATH, R_NONE, {.p=&C_Sendmail}, {.p=SENDMAIL " -oem -oi"} },
+   /*
+   ** .pp
+diff --git a/mutt.h b/mutt.h
+index 549a4dde..947d1a06 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -331,6 +331,7 @@ enum
+   C_Quit,
+   C_ReplyTo,
+   C_Recall,
++  OPT_SENDMULTIPARTALT,
+ #if defined(USE_SSL)
+   C_SslStarttls,
+ #endif
+diff --git a/postpone.c b/postpone.c
+index 6d4b5c6e..81f84fbd 100644
+--- a/postpone.c
++++ b/postpone.c
+@@ -663,17 +663,17 @@ int mutt_prepare_template(FILE *fp, struct Context *ctx, struct Email *newhdr, struct Email *hdr,
+   /*
+    * We don't need no primary multipart.
+    * Note: We _do_ preserve messages!
+-   *
+-   * XXX - we don't handle multipart/alternative in any
+-   * smart way when sending messages.  However, one may
+-   * consider this a feature.
+-   *
+    */
+-
+   if (newhdr->content->type == TYPEMULTIPART)
+     newhdr->content = mutt_remove_multipart_mixed(newhdr->content);
+ 
+-  /* TODO: deal with multipart/alternative here */
++  /* Note: this just uses the *first* alternative and strips the rest.
++   * It might be better to scan for text/plain.  On the other hand,
++   * mutt's alternative generation filter in theory allows composing
++   * text/html and generating the text/plain from that.  This way will
++   * preserve the alternative originally composed by the user.
++   */
++  newhdr->content = mutt_remove_multipart_alternative(newhdr->content);
+ 
+   s.fpin = bfp;
+ 
+diff --git a/protos.h b/protos.h
+index eb98f53c..5626359c 100644
+--- a/protos.h
++++ b/protos.h
+@@ -91,11 +91,14 @@ struct Address *mutt_remove_xrefs(struct Address *, struct Address *);
+ struct Address *mutt_expand_aliases(struct Address *);
+ struct Address *mutt_parse_adrlist(struct Address *, const char *);
+ 
++struct Body *mutt_run_send_alternative_filter(struct Body *b);
+ struct Body *mutt_make_file_attach(const char *);
+ struct Body *mutt_make_message_attach(struct Context *, struct Email *, int);
+ struct Body *mutt_remove_multipart(struct Body *);
+ struct Body *mutt_remove_multipart_mixed(struct Body *);
+ struct Body *mutt_make_multipart_mixed(struct Body *);
++struct Body *mutt_make_multipart_alternative(struct Body *b, struct Body *alternative);
++struct Body *mutt_remove_multipart_alternative(struct Body *b);
+ struct Body *mutt_new_body(void);
+ struct Body *mutt_parse_multipart(FILE *, const char *, LOFF_T, int);
+ struct Body *mutt_parse_messageRFC822(FILE *, struct Body *);
+diff --git a/send.c b/send.c
+index c47a9144..e6cf2652 100644
+--- a/send.c
++++ b/send.c
+@@ -1098,6 +1098,30 @@ struct Address *mutt_default_from(void)
+   return (adr);
+ }
+ 
++static int generate_multipart_alternative(struct Email *msg)
++{
++  struct Body *alternative;
++
++  if (!SendMultipartAltFilter)
++    return 0;
++  if (query_quadoption(OPT_SENDMULTIPARTALT,
++                        /* L10N:
++                           This is the query for the $send_multipart_alternative quadoption.
++                           Answering yes generates an alternative content using
++                           $send_multipart_alternative_filter
++                        */
++                        _("Generate multipart/alternative content?")) != MUTT_YES)
++    return 0;
++
++  alternative = mutt_run_send_alternative_filter(msg->content);
++  if (!alternative)
++    return -1;
++
++  msg->content = mutt_make_multipart_alternative(msg->content, alternative);
++
++  return 0;
++}
++
+ static int send_message(struct Email *msg)
+ {
+   struct Buffer *tempfile = NULL;
+@@ -1232,7 +1256,8 @@ static int save_fcc(struct Email *msg, struct Buffer *fcc,
+           && (mutt_strcmp(msg->content->subtype, "encrypted") == 0 ||
+               mutt_strcmp(msg->content->subtype, "signed") == 0))
+       {
+-        if (clear_content->type == TYPEMULTIPART)
++        if ((clear_content->type == TYPEMULTIPART) &&
++            !ascii_strcasecmp(clear_content->subtype, "mixed"))
+         {
+           if (!(msg->security & ENCRYPT) && (msg->security & SIGN))
+           {
+@@ -1257,7 +1282,7 @@ static int save_fcc(struct Email *msg, struct Buffer *fcc,
+           save_content = msg->content;
+         }
+       }
+-      else
++      else if (!ascii_strcasecmp(msg->content->subtype, "mixed"))
+         msg->content = msg->content->parts;
+     }
+   }
+@@ -2119,7 +2144,17 @@ main_loop:
+     }
+   }
+ 
+-  /* multipart/alternative generation does here */
++  if (!(flags & SENDBATCH) ||
++      quadoption(OPT_SENDMULTIPARTALT) == MUTT_YES)
++  {
++    if (generate_multipart_alternative(msg))
++    {
++      if (!(flags & SENDBATCH))
++        goto main_loop;
++      else
++        goto cleanup;
++    }
++  }
+ 
+   if (msg->content->next)
+     msg->content = mutt_make_multipart_mixed(msg->content);
+@@ -2153,6 +2188,7 @@ main_loop:
+           mutt_protect(msg, pgpkeylist, 0) == -1)
+       {
+         msg->content = mutt_remove_multipart_mixed(msg->content);
++        msg->content = mutt_remove_multipart_alternative(msg->content);
+ 
+         FREE(&pgpkeylist);
+ 
+@@ -2210,6 +2246,7 @@ main_loop:
+       FREE(&pgpkeylist);
+       mutt_free_envelope(&msg->content->mime_headers);  /* protected headers */
+       msg->content = mutt_remove_multipart_mixed(msg->content);
++      msg->content = mutt_remove_multipart_alternative(msg->content);
+       decode_descriptions(msg->content);
+       mutt_unprepare_envelope(msg->env);
+       goto main_loop;
+diff --git a/sendlib.c b/sendlib.c
+index 7ff6e74e..90eefefd 100644
+--- a/sendlib.c
++++ b/sendlib.c
+@@ -1391,6 +1391,109 @@ struct Body *mutt_make_message_attach(struct Context *ctx, struct Email *hdr, int attach_msg)
+   return (body);
+ }
+ 
++struct Body *mutt_run_send_alternative_filter(struct Body *b)
++{
++  struct Buffer *alt_file = NULL;
++  FILE *b_fp = NULL, *alt_fp = NULL;
++  FILE *filter_in = NULL, *filter_out = NULL, *filter_err = NULL;
++  struct Body *alternative = NULL;
++  pid_t thepid = 0;
++  char *mime = NULL;
++  char *buf = NULL;
++  size_t buflen;
++
++  if (!SendMultipartAltFilter)
++    return NULL;
++
++  if ((b_fp = safe_fopen(b->filename, "r")) == NULL)
++  {
++    mutt_perror(b->filename);
++    goto cleanup;
++  }
++
++  alt_file = mutt_buffer_pool_get();
++  mutt_buffer_mktemp(alt_file);
++  if ((alt_fp = safe_fopen(mutt_b2s(alt_file), "w")) == NULL)
++  {
++    mutt_perror(mutt_b2s(alt_file));
++    goto cleanup;
++  }
++
++  if ((thepid = mutt_create_filter(SendMultipartAltFilter, &filter_in, &filter_out, &filter_err)) < 0)
++  {
++    mutt_error(_("Error running \"%s\"!"), SendMultipartAltFilter);
++    goto cleanup;
++  }
++
++  mutt_copy_stream(b_fp, filter_in);
++  safe_fclose(&b_fp);
++  safe_fclose(&filter_in);
++
++  mime = mutt_read_line(NULL, &buflen, filter_out, NULL, 0);
++  if (!mime || !strchr(mime, '/'))
++  {
++    /* L10N:
++       The first line of output from $send_multipart_alternative_filter
++       should be a mime type, e.g. text/html.  This error is generated
++       if that is missing.
++    */
++    mutt_error(_("Missing mime type from output of \"%s\"!"), SendMultipartAltFilter);
++    goto cleanup;
++  }
++
++  buf = mutt_read_line(NULL, &buflen, filter_out, NULL, 0);
++  if (!buf || mutt_strlen(buf))
++  {
++    /* L10N:
++       The second line of output from $send_multipart_alternative_filter
++       should be a blank line.  This error is generated if the blank line
++       is missing.
++    */
++    mutt_error(_("Missing blank line separator from output of \"%s\"!"), SendMultipartAltFilter);
++    goto cleanup;
++  }
++
++  mutt_copy_stream(filter_out, alt_fp);
++  safe_fclose(&filter_out);
++  safe_fclose(&filter_err);
++
++  if (mutt_wait_filter(thepid) != 0)
++  {
++    mutt_error(_("Error running \"%s\"!"), SendMultipartAltFilter);
++    thepid = 0;
++    goto cleanup;
++  }
++  thepid = 0;
++  safe_fclose(&alt_fp);
++
++  alternative = mutt_new_body();
++  alternative->filename = safe_strdup(mutt_b2s(alt_file));
++  alternative->unlink = 1;
++  alternative->use_disp = 0;
++  alternative->disposition = DISPINLINE;
++
++  mutt_parse_content_type(mime, alternative);
++  mutt_update_encoding(alternative);
++
++cleanup:
++  safe_fclose(&b_fp);
++  if (alt_fp)
++  {
++    safe_fclose(&alt_fp);
++    mutt_unlink(mutt_b2s(alt_file));
++  }
++  mutt_buffer_pool_release(&alt_file);
++  safe_fclose(&filter_in);
++  safe_fclose(&filter_out);
++  safe_fclose(&filter_err);
++  if (thepid > 0)
++    mutt_wait_filter(thepid);
++  FREE(&buf);
++  FREE(&mime);
++
++  return alternative;
++}
++
+ static void run_mime_type_query(struct Body *att)
+ {
+   FILE *fp, *fperr;
+@@ -1560,6 +1663,39 @@ struct Body *mutt_remove_multipart_mixed(struct Body *b)
+   return b;
+ }
+ 
++struct Body *mutt_make_multipart_alternative(struct Body *b, struct Body *alternative)
++{
++  struct Body *attachments, *mp;
++
++  attachments = b->next;
++
++  b->next = alternative;
++  mp = mutt_make_multipart(b, "alternative");
++
++  mp->next = attachments;
++
++  return mp;
++}
++
++struct Body *mutt_remove_multipart_alternative(struct Body *b)
++{
++  struct Body *attachments;
++
++  if ((b->type != TYPEMULTIPART) ||
++      ascii_strcasecmp(b->subtype, "alternative"))
++    return b;
++
++  attachments = b->next;
++  b->next = NULL;
++
++  b = mutt_remove_multipart(b);
++
++  mutt_free_body(&b->next);
++  b->next = attachments;
++
++  return b;
++}
++
+ char *mutt_make_date(char *s, size_t len)
+ {
+   time_t t = time(NULL);

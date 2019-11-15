@@ -1,0 +1,30 @@
+From 773166e9ef0a2bc3eca93a8e16560fa4571673ad Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Mon, 9 Sep 2019 18:19:03 -0700
+Subject: Change browser <display-filename> to show full_path
+
+Prior to the introduction of display_name/full_path, it showed "name",
+which was the full IMAP URL but the shortname for folder/mailbox view.
+
+Now that the full_path is available, it makes sense to show that for
+all cases.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/773166e9ef0a2bc3eca93a8e16560fa4571673ad
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ browser.c | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+
+diff --git a/browser.c b/browser.c
+index c75406ca..4e45013d 100644
+--- a/browser.c
++++ b/browser.c
+@@ -994,7 +994,7 @@ void _mutt_buffer_select_file(struct Buffer *f, int flags, char ***files, int *numfile
+ 
+       case OP_BROWSER_TELL:
+         if (state.entrylen)
+-          mutt_message("%s", state.entry[menu->current].display_name);
++          mutt_message("%s", state.entry[menu->current].full_path);
+         break;
+ 
+ #ifdef USE_IMAP

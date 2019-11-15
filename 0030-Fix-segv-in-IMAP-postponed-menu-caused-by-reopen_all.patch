@@ -1,0 +1,53 @@
+From 3d9a107297bbe8c73629acc4ebfb4e90c7557acc Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Fri, 13 Dec 2019 15:58:20 -0800
+Subject: Fix segv in IMAP postponed menu caused by reopen_allow
+
+imap_open_mailbox() leaves IMAP_REOPEN_ALLOW set for the connection.
+I noticed this previously but didn't bother untangling the logic yet
+because the index always calls mx_check_mailbox() right away, which
+unsets the flag.
+
+However, when debugging the segv for commit 51729d8d I realized the
+postponed menu/context also suffers from the problem, leaving the menu
+ripe for segvs due to unmanaged expunges.
+
+I believe imap_read_headers() turns it off and back on to avoid
+goofing up imap_cmd_finish() when a reopen *is* allowed.
+
+The logic needs to be cleaned up and fixed.  However for a stable
+branch fix, I'm am taking a conservative approach and just calling
+mx_check_mailbox() to turn it back off.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/3d9a107297bbe8c73629acc4ebfb4e90c7557acc
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ postpone.c | 12 ++++++++++++
+ 1 file changed, 12 insertions(+)
+
+diff --git a/postpone.c b/postpone.c
+index 63c37588..d23106c7 100644
+--- a/postpone.c
++++ b/postpone.c
+@@ -254,6 +254,18 @@ int mutt_get_postponed (CONTEXT *ctx, HEADER *hdr, HEADER **cur, BUFFER *fcc)
+     return (-1);
+   }
+ 
++  /* TODO:
++   * mx_open_mailbox() for IMAP leaves IMAP_REOPEN_ALLOW set.  For the
++   * index this is papered-over because it calls mx_check_mailbox()
++   * every event loop (which resets that flag).
++   *
++   * For a stable-branch fix, I'm doing the same here, to prevent
++   * context changes from occuring behind the scenes and causing
++   * segvs, but probably the flag needs to be reset after downloading
++   * headers in imap_open_mailbox().
++   */
++  mx_check_mailbox (PostContext, NULL);
++
+   if (! PostContext->msgcount)
+   {
+     PostCount = 0;
+-- 
+2.24.1
+

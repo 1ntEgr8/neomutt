@@ -1,0 +1,139 @@
+From c64baf939418b9ad7380edabb4f20be812bdd1d4 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Thu, 7 Nov 2019 19:33:31 -0800
+Subject: Change $write_bcc to default off
+
+Change Fcc'ing to always write a Bcc header regardless of the setting.
+
+Update the variable documentation to note the difference when Fcc'ing.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/c64baf939418b9ad7380edabb4f20be812bdd1d4
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ init.h    | 19 +++++++++++++------
+ mutt.h    |  1 +
+ sendlib.c | 16 +++++++++++-----
+ 3 files changed, 25 insertions(+), 11 deletions(-)
+
+diff --git a/init.h b/init.h
+index fe8519bb..7408778e 100644
+--- a/init.h
++++ b/init.h
+@@ -4316,14 +4316,21 @@ struct option_t MuttVars[] = {
+   ** .pp
+   **(DEPRECATED) Equivalent to setting $$wrap with a negative value.
+   */
+-  { "write_bcc",        DT_BOOL, R_NONE, {.l=C_WriteBcc}, {.l=1} },
++  { "write_bcc",        DT_BOOL, R_NONE, {.l=C_WriteBcc}, {.l=0} },
+   /*
+   ** .pp
+-  ** Controls whether mutt writes out the ``Bcc:'' header when preparing
+-  ** messages to be sent.  Exim users may wish to unset this. If mutt
+-  ** is set to deliver directly via SMTP(see $$smtp_url), this
+-  ** option does nothing: mutt will never write out the ``Bcc:'' header
+-  ** in this case.
++  ** Controls whether mutt writes out the ``Bcc:'' header when
++  ** preparing messages to be sent.  Some MTAs, such as Exim and
++  ** Courier, do not strip the ``Bcc:'' header; so it is advisable to
++  ** leave this unset unless you have a particular need for the header
++  ** to be in the sent message.
++  ** .pp
++  ** If mutt is set to deliver directly via SMTP(see $$smtp_url),
++  ** this option does nothing: mutt will never write out the ``Bcc:''
++  ** header in this case.
++  ** .pp
++  ** Note this option only affects the sending of messages.  Fcc'ed
++  ** messages will always write the ``Bcc:'' header if one exists.
+   */
+   { "write_inc",        DT_NUMBER,         R_NONE, {.p=&C_WriteInc}, {.l=10} },
+   /*
+diff --git a/mutt.h b/mutt.h
+index 947d1a06..37bd61b9 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -159,6 +159,7 @@ typedef enum
+ typedef enum
+ {
+   MUTT_WRITE_HEADER_NORMAL,
++  MUTT_WRITE_HEADER_FCC,
+   MUTT_WRITE_HEADER_POSTPONE,
+   MUTT_WRITE_HEADER_EDITHDRS,
+   MUTT_WRITE_HEADER_MIME
+diff --git a/sendlib.c b/sendlib.c
+index bffa604f..3422d0aa 100644
+--- a/sendlib.c
++++ b/sendlib.c
+@@ -2160,6 +2160,7 @@ out:
+  *
+  * mode == MUTT_WRITE_HEADER_EDITHDRS  => "lite" mode(used for edit_hdrs)
+  * mode == MUTT_WRITE_HEADER_NORMAL    => normal mode.  write full header + MIME headers
++ * mode == MUTT_WRITE_HEADER_FCC       => fcc mode, like normal mode but for Bcc header
+  * mode == MUTT_WRITE_HEADER_POSTPONE  => write just the envelope info
+  * mode == MUTT_WRITE_HEADER_MIME      => for writing protected headers
+  *
+@@ -2180,7 +2181,8 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+   struct ListHead *tmp = env->userhdrs;
+   int has_agent = 0; /* user defined user-agent header field exists */
+ 
+-  if (mode == MUTT_WRITE_HEADER_NORMAL && !privacy)
++  if ((mode == MUTT_WRITE_HEADER_NORMAL || mode == MUTT_WRITE_HEADER_FCC) &&
++      !privacy)
+     fputs(mutt_make_date(buffer, sizeof(buffer)), fp);
+ 
+   /* C_UseFrom is not consulted here so that we can still write a C_From:
+@@ -2220,6 +2222,7 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+   {
+     if (mode == MUTT_WRITE_HEADER_POSTPONE ||
+         mode == MUTT_WRITE_HEADER_EDITHDRS ||
++        mode == MUTT_WRITE_HEADER_FCC ||
+        (mode == MUTT_WRITE_HEADER_NORMAL && option(C_WriteBcc)))
+     {
+       fputs("Bcc: ", fp);
+@@ -2233,6 +2236,7 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+   {
+     if (hide_protected_subject &&
+        (mode == MUTT_WRITE_HEADER_NORMAL ||
++         mode == MUTT_WRITE_HEADER_FCC ||
+          mode == MUTT_WRITE_HEADER_POSTPONE))
+       mutt_write_one_header(fp, "Subject", C_CryptProtectedHeadersSubject, NULL, 0, 0);
+     else
+@@ -2260,6 +2264,7 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+   }
+ 
+   if (mode == MUTT_WRITE_HEADER_NORMAL ||
++      mode == MUTT_WRITE_HEADER_FCC ||
+       mode == MUTT_WRITE_HEADER_POSTPONE)
+   {
+     if (env->references)
+@@ -2284,7 +2289,7 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+ #ifdef USE_AUTOCRYPT
+   if (option(C_Autocrypt))
+   {
+-    if (mode == MUTT_WRITE_HEADER_NORMAL)
++    if (mode == MUTT_WRITE_HEADER_NORMAL || mode == MUTT_WRITE_HEADER_FCC)
+       mutt_autocrypt_write_autocrypt_header(env, fp);
+     if (mode == MUTT_WRITE_HEADER_MIME)
+       mutt_autocrypt_write_gossip_headers(env, fp);
+@@ -2323,7 +2328,8 @@ int mutt_write_rfc822_header(FILE *fp, struct Envelope *env, struct Body *attach,
+     }
+   }
+ 
+-  if (mode == MUTT_WRITE_HEADER_NORMAL && !privacy &&
++  if ((mode == MUTT_WRITE_HEADER_NORMAL || mode == MUTT_WRITE_HEADER_FCC) &&
++      !privacy &&
+       option(C_UserAgent) && !has_agent)
+   {
+     /* Add a vanity header */
+@@ -3018,10 +3024,10 @@ int mutt_write_fcc(const char *path, struct Email *hdr, const char *msgid, int post,
+   }
+ 
+   /* post == 1 => postpone message.
+-   * post == 0 => Normal mode.
++   * post == 0 => fcc mode.
+    * */
+   mutt_write_rfc822_header(msg->fp, hdr->env, hdr->content,
+-                            post ? MUTT_WRITE_HEADER_POSTPONE : MUTT_WRITE_HEADER_NORMAL,
++                            post ? MUTT_WRITE_HEADER_POSTPONE : MUTT_WRITE_HEADER_FCC,
+                             0,
+                             option(C_CryptProtectedHeadersRead) &&
+                             mutt_should_hide_protected_subject(hdr));

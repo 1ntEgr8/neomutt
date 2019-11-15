@@ -1,0 +1,89 @@
+From abfaa0e01e1c897e4171f49dbfdc457c002422ed Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Tue, 3 Dec 2019 18:55:49 -0800
+Subject: Add $sidebar_use_mb_shortcuts to turn off shortcuts
+
+If unset, Mutt will revert to pre-1.13 display behavior, matching and
+removing a literal $folder prefix, without using mailbox shortcuts.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/abfaa0e01e1c897e4171f49dbfdc457c002422ed
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ init.h    |  9 +++++++++
+ mutt.h    |  1 +
+ sidebar.c | 27 ++++++++++++++++++++++++---
+ 3 files changed, 34 insertions(+), 3 deletions(-)
+
+diff --git a/init.h b/init.h
+index bf7f1288..21bec2b2 100644
+--- a/init.h
++++ b/init.h
+@@ -3272,6 +3272,15 @@ struct option_t MuttVars[] = {
+   ** \fC<sidebar-prev-new>\fP command is similarly affected, wrapping around to
+   ** the end of the list.
+   */
++  { "sidebar_use_mb_shortcuts", DT_BOOL, R_SIDEBAR, {.l=OPTSIDEBARUSEMBSHORTCUTS}, {.l=1} },
++  /*
++  ** .pp
++  ** When set, sidebar mailboxes will be displayed with mailbox shortcut prefixes
++  ** "=" or "~".
++  ** .pp
++  ** When unset, the sidebar will use pre-1.13.0 behavior: trimming off a matching
++  ** $$folder but otherwise not using mailbox shortcuts.
++  */
+   { "sidebar_short_path", DT_BOOL, R_SIDEBAR, {.l=OPTSIDEBARSHORTPATH}, {.l=0} },
+   /*
+   ** .pp
+diff --git a/mutt.h b/mutt.h
+index 41bec8cc..de039c92 100644
+--- a/mutt.h
++++ b/mutt.h
+@@ -515,6 +515,7 @@ enum
+   OPTSIDEBARFOLDERINDENT,
+   OPTSIDEBARNEWMAILONLY,
+   OPTSIDEBARNEXTNEWWRAP,
++  OPTSIDEBARUSEMBSHORTCUTS,
+   OPTSIDEBARSHORTPATH,
+ #endif
+   OPTSIGDASHES,
+diff --git a/sidebar.c b/sidebar.c
+index 364b2285..ceb6c605 100644
+--- a/sidebar.c
++++ b/sidebar.c
+@@ -668,9 +668,30 @@ static void draw_sidebar (int num_rows, int num_cols, int div_width)
+       b->msg_flagged = Context->flagged;
+     }
+ 
+-    mutt_buffer_strcpy (pretty_folder_name, mutt_b2s (b->pathbuf));
+-    mutt_buffer_pretty_mailbox (pretty_folder_name);
+-    sidebar_folder_name = mutt_b2s (pretty_folder_name);
++    if (option (OPTSIDEBARUSEMBSHORTCUTS))
++    {
++      mutt_buffer_strcpy (pretty_folder_name, mutt_b2s (b->pathbuf));
++      mutt_buffer_pretty_mailbox (pretty_folder_name);
++      sidebar_folder_name = mutt_b2s (pretty_folder_name);
++    }
++    else
++    {
++      /* compute length of Maildir without trailing separator */
++      size_t maildirlen = mutt_strlen (Maildir);
++      if (maildirlen &&
++          SidebarDelimChars &&
++          strchr (SidebarDelimChars, Maildir[maildirlen - 1]))
++        maildirlen--;
++
++      /* check whether Maildir is a prefix of the current folder's path */
++      if ((mutt_buffer_len (b->pathbuf) > maildirlen) &&
++          (mutt_strncmp (Maildir, mutt_b2s (b->pathbuf), maildirlen) == 0) &&
++          SidebarDelimChars &&
++          strchr (SidebarDelimChars, mutt_b2s (b->pathbuf)[maildirlen]))
++        sidebar_folder_name = mutt_b2s (b->pathbuf) + (maildirlen + 1);
++      else
++        sidebar_folder_name = mutt_b2s (b->pathbuf);
++    }
+ 
+     if (SidebarDelimChars)
+     {
+-- 
+2.24.1
+

@@ -1,0 +1,49 @@
+From 24ca73ae0d3a218e7b9872bd35538b9e940006a4 Mon Sep 17 00:00:00 2001
+From: Kevin McCarthy <kevin@8t8.us>
+Date: Wed, 13 Nov 2019 20:09:37 -0800
+Subject: Fix $fcc_attach to not prompt in batch mode
+
+Include attachments if it is 'yes' or 'ask-yes', like $copy and
+$send_multipart_alternative.
+
+Upstream-commit: https://gitlab.com/muttmua/mutt/commit/24ca73ae0d3a218e7b9872bd35538b9e940006a4
+Co-authored-by: Richard Russon <rich@flatcap.org>
+---
+ send.c | 17 ++++++++++++++---
+ 1 file changed, 14 insertions(+), 3 deletions(-)
+
+diff --git a/send.c b/send.c
+index ad24fef3..11e94b1b 100644
+--- a/send.c
++++ b/send.c
+@@ -1217,7 +1217,7 @@ static int save_fcc(struct Email *msg, struct Buffer *fcc,
+   struct Body *save_content = NULL;
+   struct Body *save_sig = NULL;
+   struct Body *save_parts = NULL;
+-  int choice;
++  int choice, save_atts;
+ 
+   mutt_buffer_expand_path(fcc);
+ 
+@@ -1259,8 +1259,19 @@ static int save_fcc(struct Email *msg, struct Buffer *fcc,
+     }
+ 
+     /* check to see if the user wants copies of all attachments */
+-    if (query_quadoption(C_FccAttach, _("Save attachments in Fcc?")) != MUTT_YES &&
+-        msg->content->type == TYPEMULTIPART)
++    save_atts = 1;
++    if (msg->content->type == TYPEMULTIPART)
++    {
++      /* In batch mode, save attachments if the quadoption is yes or ask-yes */
++      if (flags & SENDBATCH)
++      {
++        if (!(quadoption(C_FccAttach) & 0x1))
++          save_atts = 0;
++      }
++      else if (query_quadoption(C_FccAttach, _("Save attachments in Fcc?")) != MUTT_YES)
++        save_atts = 0;
++    }
++    if (!save_atts)
+     {
+       if (WithCrypto
+           && (msg->security & (ENCRYPT | SIGN | AUTOCRYPT))
