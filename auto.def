@@ -445,10 +445,6 @@ if {[get-define want-gpgme]} {
       if {$gpgme_maj < 1 || $gpgme_min < 8} {
         user-error "Found GPGME version $gpgme_version, need 1.8.0 for AutoCrypt"
       }
-    } else {
-      if {$gpgme_maj < 1 || $gpgme_min < 4} {
-        user-error "Found GPGME version $gpgme_version, need 1.4.0"
-      }
     }
     define GPGME_VERSION_NUMBER [format "0x%02x%02x%02x" $gpgme_maj $gpgme_min $gpgme_patch]
 
