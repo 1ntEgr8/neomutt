@@ -14,6 +14,7 @@ commands.c
 command_parse.c
 complete.c
 compmbox/compress.c
+compmbox/path.c
 compose.c
 compress/compress.c
 compress/lz4.c
