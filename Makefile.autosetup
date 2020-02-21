@@ -104,7 +104,7 @@ ALLOBJS+=	$(LIBAUTOCRYPTOBJS)
 ###############################################################################
 # libpop
 LIBPOP=	libpop.a
-LIBPOPOBJS=	pop/pop.o pop/pop_auth.o pop/pop_lib.o
+LIBPOPOBJS=	pop/pop.o pop/pop_auth.o pop/pop_lib.o pop/path.o
 CLEANFILES+=	$(LIBPOP) $(LIBPOPOBJS)
 MUTTLIBS+=	$(LIBPOP)
 ALLOBJS+=	$(LIBPOPOBJS)
@@ -616,6 +616,7 @@ coverage: all test
 	  --directory mbox \
 	  --directory nntp \
 	  --directory notmuch \
+	  --directory pop
 
 	-genhtml --output-directory lcov --frames lcov.info
 	lcov --list lcov.info
