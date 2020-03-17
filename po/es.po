@@ -4197,10 +4197,7 @@ msgstr ""
 
 #: ncrypt/crypt_gpgme.c:3188 ncrypt/pgp.c:715
 msgid "[-- END PGP MESSAGE --]\n"
-msgstr ""
-"\n"
-"[-- FIN DEL MENSAJE PGP --]\n"
-"\n"
+msgstr "[-- FIN DEL MENSAJE PGP --]\n"
 
 #: ncrypt/crypt_gpgme.c:3190 ncrypt/pgp.c:729
 msgid "[-- END PGP PUBLIC KEY BLOCK --]\n"
