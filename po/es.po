@@ -3309,7 +3309,7 @@ msgstr ""
 "                inmediatamente con código de salida 1 si no se encuentra\n"
 "                ninguno en ninguno de los buzones\n"
 "  -z            Abrir el primer buzón o el especificado (-f) si tiene algún\n"
-"                mensaje, y si no, salir inmediatamente con código de salida 1\n"
+"                mensaje, y si no, salir inmediatamente con código de salida 1"
 
 #: main.c:245
 msgid "Error initializing terminal"
